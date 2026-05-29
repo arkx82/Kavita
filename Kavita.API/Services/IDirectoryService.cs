@@ -6,6 +6,7 @@ using System.Threading.Tasks;
 using Kavita.Common.Helpers;
 using Kavita.Models.DTOs.System;
 using Kavita.Models.Entities.Enums;
+using Kavita.Models.Parser;
 using Microsoft.Extensions.Logging;
 
 namespace Kavita.API.Services;
@@ -78,5 +79,8 @@ public interface IDirectoryService
     IEnumerable<string> GetAllDirectories(string folderPath, GlobMatcher? matcher = null);
     string GetParentDirectoryName(string fileOrFolder);
     IList<string> ScanFiles(string folderPath, string fileTypes, GlobMatcher? matcher = null, SearchOption searchOption = SearchOption.AllDirectories);
+    IList<ScanResult> GdsScanFiles(string folderPath, string fileTypes,
+        IDictionary<string, IList<SeriesModified>> seriesPaths, List<ScanResult> result, string libraryRoot,
+        bool forceCheck, GlobMatcher? matcher = null);
     DateTime GetLastWriteTime(string folderPath);
 }

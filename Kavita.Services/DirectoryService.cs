@@ -10,6 +10,7 @@ using Kavita.API.Services;
 using Kavita.Common.Extensions;
 using Kavita.Common.Helpers;
 using Kavita.Models.DTOs.System;
+using Kavita.Models.Parser;
 using Kavita.Services.Scanner;
 using Microsoft.Extensions.Logging;
 
@@ -749,6 +750,60 @@ public class DirectoryService : IDirectoryService
         return files;
     }
 
+    public IList<ScanResult> GdsScanFiles(string folderPath, string fileTypes,
+        IDictionary<string, IList<SeriesModified>> seriesPaths, List<ScanResult> result, string libraryRoot,
+        bool forceCheck, GlobMatcher? matcher = null)
+    {
+        _logger.LogDebug("[GdsScanFiles] called on {Path}", folderPath);
+        var files = new List<string>();
+        if (!Exists(folderPath)) return result;
+
+        var directories = GetDirectories(folderPath, matcher);
+        foreach (var directory in directories)
+        {
+            if (!forceCheck && seriesPaths.TryGetValue(Parser.NormalizePath(directory), out var seriesInDir))
+            {
+                var directoryInfo = new FileInfo(directory);
+                if (seriesInDir.Count > 0 && directoryInfo.LastWriteTime < seriesInDir[0].LastScanned)
+                {
+                    result.Add(new ScanResult
+                    {
+                        Files = ArraySegment<string>.Empty,
+                        Folder = Parser.NormalizePath(directory),
+                        LibraryRoot = libraryRoot,
+                        HasChanged = false
+                    });
+                    continue;
+                }
+            }
+
+            GdsScanFiles(directory, fileTypes, seriesPaths, result, libraryRoot, forceCheck, matcher);
+        }
+
+        if (matcher == null)
+        {
+            files.AddRange(GetFilesWithCertainExtensions(folderPath, fileTypes));
+        }
+        else
+        {
+            var foundFiles = GetFilesWithCertainExtensions(folderPath, fileTypes)
+                .Where(file => !matcher.ExcludeMatches(FileSystem.FileInfo.New(file).Name));
+            files.AddRange(foundFiles);
+        }
+
+        if (files.Count > 0)
+        {
+            result.Add(new ScanResult
+            {
+                Files = files,
+                Folder = Parser.NormalizePath(folderPath),
+                LibraryRoot = libraryRoot,
+                HasChanged = true
+            });
+        }
+
+        return result;
+    }
 
     /// <summary>
     /// Recursively scans a folder and returns the max last write time on any folders and files

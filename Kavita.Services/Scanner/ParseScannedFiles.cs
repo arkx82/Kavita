@@ -83,6 +83,11 @@ public class ParseScannedFiles
     private async Task<IList<ScanResult>> ScanDirectories(string folderPath, IDictionary<string, IList<SeriesModified>> seriesPaths,
         Library library, bool forceCheck, GlobMatcher matcher, List<ScanResult> result, string fileExtensions)
     {
+        if (library.Type == LibraryType.GDS)
+        {
+            return _directoryService.GdsScanFiles(folderPath, fileExtensions, seriesPaths, result, folderPath, forceCheck, matcher);
+        }
+
         var allDirectories = _directoryService.GetAllDirectories(folderPath, matcher)
             .Select(Parser.NormalizePath)
             .OrderByDescending(d => d.Length)
