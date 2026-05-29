@@ -22,6 +22,7 @@ public class ReadingItemService : IReadingItemService
     private readonly BookParser _bookParser;
     private readonly PdfParser _pdfParser;
     private readonly IMediaErrorService _mediaErrorService;
+    private readonly GdsParser _gdsParser;
 
     public ReadingItemService(IArchiveService archiveService, IBookService bookService, IImageService imageService,
         IDirectoryService directoryService, ILogger<ReadingItemService> logger, IMediaErrorService mediaErrorService)
@@ -38,6 +39,7 @@ public class ReadingItemService : IReadingItemService
         _bookParser = new BookParser(directoryService, bookService, _basicParser);
         _comicVineParser = new ComicVineParser(directoryService);
         _pdfParser = new PdfParser(directoryService);
+        _gdsParser = new GdsParser(directoryService, _imageParser);
 
     }
 
@@ -76,6 +78,11 @@ public class ReadingItemService : IReadingItemService
     {
         try
         {
+            if (type == LibraryType.GDS && Path.GetFileName(path).StartsWith("cover.", StringComparison.OrdinalIgnoreCase))
+            {
+                return null;
+            }
+
             var info = Parse(path, rootPath, libraryRoot, type, enableMetadata);
             if (info == null)
             {
@@ -146,6 +153,7 @@ public class ReadingItemService : IReadingItemService
             MangaFormat.Archive => _archiveService.GetCoverImage(filePath, fileName, _directoryService.CoverImageDirectory, encodeFormat, size),
             MangaFormat.Image => _imageService.GetCoverImage(filePath, fileName, _directoryService.CoverImageDirectory, encodeFormat, size),
             MangaFormat.Pdf => _bookService.GetCoverImage(filePath, fileName, _directoryService.CoverImageDirectory, encodeFormat, size),
+            MangaFormat.Text => "text.png",
             _ => string.Empty
         };
     }
@@ -189,6 +197,10 @@ public class ReadingItemService : IReadingItemService
     /// <returns></returns>
     private ParserInfo? Parse(string path, string rootPath, string libraryRoot, LibraryType type, bool enableMetadata)
     {
+        if (type == LibraryType.GDS)
+        {
+            return _gdsParser.Parse(path, rootPath, libraryRoot, type);
+        }
         if (_comicVineParser.IsApplicable(path, type))
         {
             return _comicVineParser.Parse(path, rootPath, libraryRoot, type, enableMetadata, GetComicInfo(path, enableMetadata));
