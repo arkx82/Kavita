@@ -118,6 +118,10 @@ public class ReadingItemService : IReadingItemService
             {
                 return _bookService.GetNumberOfPages(filePath);
             }
+            case MangaFormat.Text:
+            {
+                return _bookService.GetNumberOfPagesText(filePath);
+            }
             case MangaFormat.Image:
             {
                 return 1;
