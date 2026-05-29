@@ -17,7 +17,7 @@ import {SideNavItemComponent} from "../_components/side-nav-item/side-nav-item.c
 import {ActivatedRoute, NavigationEnd, Router} from "@angular/router";
 import {takeUntilDestroyed, toObservable, toSignal} from "@angular/core/rxjs-interop";
 import {SettingFragmentPipe} from "../../_pipes/setting-fragment.pipe";
-import {map, of, shareReplay, switchMap, take} from "rxjs";
+import {catchError, map, of, shareReplay, switchMap, take} from "rxjs";
 import {ServerService} from "../../_services/server.service";
 import {ScrobblingService} from "../../_services/scrobbling.service";
 import {User} from "../../_models/user/user";
@@ -187,9 +187,17 @@ export class PreferenceNavComponent implements AfterViewInit {
   );
 
   private readonly scrobblingFailuresBadgeCount = toSignal(
-    this.kavitaplusAuditService.getMyActivity({category: KavitaPlusAuditCategory.Scrobble, userId: this.accountService.currentUser()!.id, status: AuditStatus.Failure}).pipe(
+    this.licenseService.checkForValidLicense().pipe(
+      switchMap(hasValidLicense => {
+        const user = this.accountService.currentUser();
+        if (!hasValidLicense || !user) return of(-1);
+
+        return this.kavitaplusAuditService.getMyActivity({category: KavitaPlusAuditCategory.Scrobble, userId: user.id, status: AuditStatus.Failure}).pipe(
+          map(d => d.pagination.totalItems),
+          catchError(() => of(-1))
+        );
+      }),
       takeUntilDestroyed(this.destroyRef),
-      map(d => d.pagination.totalItems),
       shareReplay({bufferSize: 1, refCount: true})
     ),
     { initialValue: -1 }
