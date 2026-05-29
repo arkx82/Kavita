@@ -67,7 +67,9 @@ public static class ApplicationServiceExtensions
         services.AddScoped<IScannerService, ScannerService>();
         services.AddScoped<IProcessSeries, ProcessSeries>();
         services.AddScoped<IMetadataService, MetadataService>();
+        services.AddScoped<IMetadataServiceGds, MetadataServiceGds>();
         services.AddScoped<IWordCountAnalyzerService, WordCountAnalyzerService>();
+        services.AddScoped<IWordCountAnalyzerServiceGds, WordCountAnalyzerServiceGds>();
         services.AddScoped<ILibraryWatcher, LibraryWatcher>();
         services.AddScoped<ITachiyomiService, TachiyomiService>();
         services.AddScoped<ICollectionTagService, CollectionTagService>();

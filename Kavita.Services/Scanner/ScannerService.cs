@@ -19,8 +19,10 @@ using Kavita.Models.DTOs.KavitaPlus.Metadata;
 using Kavita.Models.DTOs.Settings;
 using Kavita.Models.DTOs.SignalR;
 using Kavita.Models.Entities;
+using Kavita.Models.Entities.Enums;
 using Kavita.Models.Parser;
 using Kavita.Services.Helpers;
+using Kavita.Services.Metadata;
 using Kavita.Services.Plus;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Logging;
@@ -202,8 +204,7 @@ public class ScannerService(
         var libraryPaths = library.Folders.Select(f => f.Path).ToList();
         if (await ShouldScanSeries(seriesId, library, libraryPaths, series, true) != ScanCancelReason.NoCancel)
         {
-            BackgroundJob.Enqueue(() => metadataService.GenerateCoversForSeries(serverSettings, series.LibraryId, seriesId, false, false));
-            BackgroundJob.Enqueue(() => wordCountAnalyzerService.ScanSeries(library.Id, seriesId, bypassFolderOptimizationChecks));
+            EnqueueSeriesExtraWork(library, serverSettings, seriesId, bypassFolderOptimizationChecks);
             return;
         }
 
@@ -315,11 +316,8 @@ public class ScannerService(
 
             if (processedSeriesId != null)
             {
-                var metadataService = scope.ServiceProvider.GetRequiredService<IMetadataService>();
-                var wordCountAnalyzerService = scope.ServiceProvider.GetRequiredService<IWordCountAnalyzerService>();
-
-                await metadataService.GenerateCoversForSeries(serverSettings, scopedLibrary.Id, processedSeriesId.Value, bypassFolderOptimizationChecks, false);
-                await wordCountAnalyzerService.ScanSeries(scopedLibrary.Id, processedSeriesId.Value, bypassFolderOptimizationChecks);
+                await RunExtraSeriesWork(scope, serverSettings, scopedLibrary, processedSeriesId.Value,
+                    bypassFolderOptimizationChecks);
             }
         }
 
@@ -327,7 +325,7 @@ public class ScannerService(
         await eventHub.SendMessageAsync(MessageFactory.NotificationProgress,
             MessageFactory.LibraryScanProgressEvent(library.Name, ProgressEventType.Ended, series.Name));
 
-        await metadataService.RemoveAbandonedMetadataKeys();
+        await RemoveAbandonedMetadataKeys(library);
 
         BackgroundJob.Enqueue(() => cacheService.CleanupChapters(existingChapterIdsToClean));
         BackgroundJob.Enqueue(() => directoryService.ClearDirectory(directoryService.CacheDirectory));
@@ -572,7 +570,7 @@ public class ScannerService(
 
         await eventHub.SendMessageAsync(MessageFactory.NotificationProgress,
             MessageFactory.LibraryScanProgressEvent(library.Name, ProgressEventType.Ended, string.Empty));
-        await metadataService.RemoveAbandonedMetadataKeys();
+        await RemoveAbandonedMetadataKeys(library);
 
         BackgroundJob.Enqueue(() => directoryService.ClearDirectory(directoryService.CacheDirectory));
     }
@@ -723,14 +721,68 @@ public class ScannerService(
         await foreach (var seriesId in channel.Reader.ReadAllAsync())
         {
             using var scope = scopeFactory.CreateScope();
-            var metadataService = scope.ServiceProvider.GetRequiredService<IMetadataService>();
-            var wordCountAnalyzerService = scope.ServiceProvider.GetRequiredService<IWordCountAnalyzerService>();
+            var unitOfWork = scope.ServiceProvider.GetRequiredService<IUnitOfWork>();
+            var library = await unitOfWork.LibraryRepository.GetLibraryForIdAsync(libraryId,
+                LibraryIncludes.Folders | LibraryIncludes.FileTypes | LibraryIncludes.ExcludePatterns);
+            if (library == null) continue;
 
-            await metadataService.GenerateCoversForSeries(serverSettings, libraryId, seriesId, false, false);
-            await wordCountAnalyzerService.ScanSeries(libraryId, seriesId, forceUpdate);
+            await RunExtraSeriesWork(scope, serverSettings, library, seriesId, forceUpdate);
         }
 
         return sw.ElapsedMilliseconds;
+    }
+
+    private void EnqueueSeriesExtraWork(Library library, ServerSettingDto serverSettings, int seriesId, bool forceUpdate)
+    {
+        if (library.Type == LibraryType.GDS)
+        {
+            BackgroundJob.Enqueue<IMetadataServiceGds>(service =>
+                service.GenerateCoversForSeries(library.Id, seriesId, false, false, null, default));
+            BackgroundJob.Enqueue<IWordCountAnalyzerServiceGds>(service =>
+                service.ScanSeries(library.Id, seriesId, forceUpdate, null, default));
+
+            return;
+        }
+
+        BackgroundJob.Enqueue(() => metadataService.GenerateCoversForSeries(serverSettings, library.Id, seriesId, false, false));
+        BackgroundJob.Enqueue(() => wordCountAnalyzerService.ScanSeries(library.Id, seriesId, forceUpdate));
+    }
+
+    private static async Task RunExtraSeriesWork(IServiceScope scope, ServerSettingDto serverSettings, Library library,
+        int seriesId, bool forceUpdate)
+    {
+        if (library.Type == LibraryType.GDS)
+        {
+            var metadataServiceGds = scope.ServiceProvider.GetRequiredService<IMetadataServiceGds>();
+            var wordCountAnalyzerServiceGds = scope.ServiceProvider.GetRequiredService<IWordCountAnalyzerServiceGds>();
+            var series = await scope.ServiceProvider.GetRequiredService<IUnitOfWork>()
+                .SeriesRepository.GetFullSeriesForSeriesIdAsync(seriesId);
+            var gdsInfo = series == null ? null : GdsUtil.GetGdsInfoBySeries(series);
+
+            await metadataServiceGds.GenerateCoversForSeries(library.Id, seriesId, false, false, gdsInfo);
+            await wordCountAnalyzerServiceGds.ScanSeries(library.Id, seriesId, forceUpdate, gdsInfo);
+
+            return;
+        }
+
+        var metadataService = scope.ServiceProvider.GetRequiredService<IMetadataService>();
+        var wordCountAnalyzerService = scope.ServiceProvider.GetRequiredService<IWordCountAnalyzerService>();
+        await metadataService.GenerateCoversForSeries(serverSettings, library.Id, seriesId, false, false);
+        await wordCountAnalyzerService.ScanSeries(library.Id, seriesId, forceUpdate);
+    }
+
+    private async Task RemoveAbandonedMetadataKeys(Library library)
+    {
+        if (library.Type == LibraryType.GDS)
+        {
+            using var scope = scopeFactory.CreateScope();
+            var metadataServiceGds = scope.ServiceProvider.GetRequiredService<IMetadataServiceGds>();
+            await metadataServiceGds.RemoveAbandonedMetadataKeys();
+
+            return;
+        }
+
+        await metadataService.RemoveAbandonedMetadataKeys();
     }
 
     /// <summary>

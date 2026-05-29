@@ -17,6 +17,7 @@ using Kavita.Models.Builders;
 using Kavita.Models.Entities;
 using Kavita.Models.Entities.Enums;
 using Kavita.Models.Metadata;
+using Kavita.Services.Metadata;
 using Kavita.Services.Reading;
 using Kavita.Services.Scanner;
 using Microsoft.Extensions.DependencyInjection;
@@ -86,8 +87,11 @@ public class ScannerHelper
         serviceProvider.GetService(typeof(IUnitOfWork)).Returns(_unitOfWork);
         serviceProvider.GetService(typeof(IProcessSeries)).Returns(processSeries);
         serviceProvider.GetService(typeof(IMetadataService)).Returns(Substitute.For<IMetadataService>());
+        serviceProvider.GetService(typeof(IMetadataServiceGds)).Returns(Substitute.For<IMetadataServiceGds>());
         serviceProvider.GetService(typeof(IWordCountAnalyzerService))
             .Returns(Substitute.For<IWordCountAnalyzerService>());
+        serviceProvider.GetService(typeof(IWordCountAnalyzerServiceGds))
+            .Returns(Substitute.For<IWordCountAnalyzerServiceGds>());
 
         var scope = Substitute.For<IServiceScope>();
         scope.ServiceProvider.Returns(serviceProvider);

@@ -42,6 +42,7 @@ internal sealed record UpdateChapterArgs
     public required IList<ParserInfo> ParsedInfos { get; init; }
     public required Dictionary<string, Person> DatabasePeople { get; init; }
     public bool ForceUpdate { get; init; } = false;
+    public GdsInfo? GdsInfo { get; init; }
 }
 
 internal sealed record UpdateChapterComicInfoArgs
@@ -111,6 +112,16 @@ public class ProcessSeries(
         }
 
         if (series.LibraryId == 0) series.LibraryId = library.Id;
+        var gdsInfo = library.Type == LibraryType.GDS ? GdsUtil.GetGdsInfoByFile(firstInfo.FullFilePath) : null;
+        if (gdsInfo?.Action != null && gdsInfo.Action.TryGetValue("all_file_is_special", out var allFilesSpecial)
+            && allFilesSpecial == "true")
+        {
+            foreach (var info in parsedInfos)
+            {
+                info.IsSpecial = true;
+                info.Volumes = Parser.LooseLeafVolume;
+            }
+        }
 
         try
         {
@@ -120,7 +131,7 @@ public class ProcessSeries(
             var firstParsedInfo = parsedInfos.FirstOrDefault(p => p.ComicInfo != null, firstInfo);
             var databasePeople = await LoadAndCreateMissingChapterPeople(series, parsedInfos);
 
-            await UpdateVolumes(databasePeople, settings, series, parsedInfos, args.ForceUpdate);
+            await UpdateVolumes(databasePeople, settings, series, parsedInfos, args.ForceUpdate, gdsInfo);
             series.Pages = series.Volumes.Sum(v => v.Pages);
 
             series.NormalizedName = series.Name.ToNormalized();
@@ -162,7 +173,7 @@ public class ProcessSeries(
                 series.ComicVineId =  comicVineSeriesIds[0];
             }
 
-            await UpdateSeriesMetadata(databasePeople, settings, series, library);
+            await UpdateSeriesMetadata(databasePeople, settings, series, library, gdsInfo);
 
             // Update series FolderPath here
             await UpdateSeriesFolderPath(parsedInfos, library, series);
@@ -299,10 +310,16 @@ public class ProcessSeries(
             series.LowestFolderPath = lowestFolder;
             logger.LogDebug("Updating {Series} LowestFolderPath to {FolderPath}", series.Name, series.LowestFolderPath);
         }
+
+        if (library.Type == LibraryType.GDS)
+        {
+            series.FolderPath = series.LowestFolderPath;
+        }
     }
 
 
-    private async Task UpdateSeriesMetadata(Dictionary<string, Person> databasePeople, MetadataSettingsDto settings, Series series, Library library)
+    private async Task UpdateSeriesMetadata(Dictionary<string, Person> databasePeople, MetadataSettingsDto settings,
+        Series series, Library library, GdsInfo? gdsInfo = null)
     {
         series.Metadata ??= new SeriesMetadataBuilder().Build();
         var firstChapter = SeriesService.GetFirstChapterForMetadata(series);
@@ -587,7 +604,8 @@ public class ProcessSeries(
         }
     }
 
-    private async Task UpdateVolumes(Dictionary<string, Person> databasePeople, MetadataSettingsDto settings, Series series, IList<ParserInfo> parsedInfos, bool forceUpdate = false)
+    private async Task UpdateVolumes(Dictionary<string, Person> databasePeople, MetadataSettingsDto settings,
+        Series series, IList<ParserInfo> parsedInfos, bool forceUpdate = false, GdsInfo? gdsInfo = null)
     {
         // Add new volumes and update chapters per volume
         var distinctVolumes = parsedInfos.DistinctVolumes();
@@ -619,6 +637,7 @@ public class ProcessSeries(
             volume.Name = volume.GetNumberTitle();
 
             var infos = parsedInfos.Where(p => p.Volumes == volumeNumber).ToArray();
+            var volumeGdsInfo = GetGdsInfoForVolume(gdsInfo, infos);
 
             await UpdateChapters(new UpdateChapterArgs
             {
@@ -627,7 +646,8 @@ public class ProcessSeries(
                 Volume = volume,
                 ParsedInfos = infos,
                 DatabasePeople = databasePeople,
-                ForceUpdate = forceUpdate
+                ForceUpdate = forceUpdate,
+                GdsInfo = volumeGdsInfo
             });
             volume.Pages = volume.Chapters.Sum(c => c.Pages);
         }
@@ -698,7 +718,7 @@ public class ProcessSeries(
 
 
             // Add files
-            AddOrUpdateFileForChapter(chapter, info, args.ForceUpdate);
+            AddOrUpdateFileForChapter(chapter, info, args.ForceUpdate, args.GdsInfo);
 
             chapter.Number = info.LowestChapter.ToString(CultureInfo.InvariantCulture);
             chapter.MinNumber = info.LowestChapter;
@@ -809,19 +829,21 @@ public class ProcessSeries(
         }
     }
 
-    private void AddOrUpdateFileForChapter(Chapter chapter, ParserInfo info, bool forceUpdate = false)
+    private void AddOrUpdateFileForChapter(Chapter chapter, ParserInfo info, bool forceUpdate = false, GdsInfo? gdsInfo = null)
     {
         chapter.Files ??= [];
         var existingFile = chapter.Files.SingleOrDefault(f => f.FilePath == info.FullFilePath);
         var fileInfo = directoryService.FileSystem.FileInfo.New(info.FullFilePath);
+        var gdsPageCount = GetGdsPageCount(gdsInfo, info.FullFilePath);
         if (existingFile != null)
         {
             // TODO: I wonder if we can simplify this force check.
             existingFile.Format = info.Format;
 
-            if (!forceUpdate && !fileService.HasFileBeenModifiedSince(existingFile.FilePath, existingFile.LastModified) && existingFile.Pages != 0) return;
+            if (!forceUpdate && !fileService.HasFileBeenModifiedSince(existingFile.FilePath, existingFile.LastModified)
+                && existingFile.Pages != 0 && gdsPageCount == null) return;
 
-            existingFile.Pages = readingItemService.GetNumberOfPages(info.FullFilePath, info.Format);
+            existingFile.Pages = gdsPageCount ?? readingItemService.GetNumberOfPages(info.FullFilePath, info.Format);
             existingFile.Extension = fileInfo.Extension.ToLowerInvariant();
             existingFile.FileName = Parser.RemoveExtensionIfSupported(existingFile.FilePath);
             existingFile.FilePath = Parser.NormalizePath(existingFile.FilePath);
@@ -833,13 +855,39 @@ public class ProcessSeries(
         else
         {
 
-            var file = new MangaFileBuilder(info.FullFilePath, info.Format, readingItemService.GetNumberOfPages(info.FullFilePath, info.Format))
+            var file = new MangaFileBuilder(info.FullFilePath, info.Format,
+                    gdsPageCount ?? readingItemService.GetNumberOfPages(info.FullFilePath, info.Format))
                 .WithExtension(fileInfo.Extension)
                 .WithBytes(fileInfo.Length)
                 .WithHash()
                 .Build();
             chapter.Files.Add(file);
         }
+    }
+
+    private static int? GetGdsPageCount(GdsInfo? gdsInfo, string filePath)
+    {
+        if (gdsInfo == null) return null;
+        var key = Path.GetFileName(filePath);
+        var gdsFile = GdsUtil.GetGdsFile(gdsInfo, key);
+        if (gdsFile == null || gdsFile.Page <= 0) return null;
+
+        return gdsFile.Page;
+    }
+
+    private static GdsInfo? GetGdsInfoForVolume(GdsInfo? gdsInfo, IList<ParserInfo> infos)
+    {
+        if (gdsInfo == null) return null;
+        var volumeGdsInfo = gdsInfo;
+        foreach (var info in infos)
+        {
+            var maybeGdsInfo = GdsUtil.GetGdsInfoByFile(info.FullFilePath);
+            if (maybeGdsInfo == null) continue;
+            volumeGdsInfo = maybeGdsInfo;
+            break;
+        }
+
+        return volumeGdsInfo;
     }
 
     private async Task UpdateChapterFromComicInfo(UpdateChapterComicInfoArgs args)
