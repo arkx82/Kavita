@@ -13,6 +13,7 @@ import {KavitaPlusEventType} from "../../_models/kavitaplus/kavita-plus-event-ty
 import {Tabs} from "../../_models/tabs";
 import {TabTitlePipe} from "../../_pipes/tab-title.pipe";
 import {Pagination} from '../../_models/pagination';
+import {LicenseService} from '../../_services/license.service';
 
 @Component({
   selector: 'app-kavitaplus-activity',
@@ -24,6 +25,7 @@ import {Pagination} from '../../_models/pagination';
 export class KavitaplusActivityComponent implements OnInit {
   private readonly auditService = inject(KavitaPlusAuditService);
   private readonly scrobblingService = inject(ScrobblingService);
+  private readonly licenseService = inject(LicenseService);
   private readonly destroyRef = inject(DestroyRef);
   private readonly PAGE_SIZE = 50;
 
@@ -57,12 +59,40 @@ export class KavitaplusActivityComponent implements OnInit {
   });
 
   ngOnInit() {
-    this.loadData();
+    this.licenseService.checkForValidLicense()
+      .pipe(takeUntilDestroyed(this.destroyRef))
+      .subscribe({
+        next: hasValidLicense => {
+          if (!hasValidLicense) {
+            this.clearData();
+            return;
+          }
 
-    this.scrobblingService.getScrobbleProviders().subscribe(tokens => this.scrobblingProviders.set(tokens));
+          this.loadData();
+
+          this.scrobblingService.getScrobbleProviders()
+            .pipe(takeUntilDestroyed(this.destroyRef))
+            .subscribe(tokens => this.scrobblingProviders.set(tokens));
+        },
+        error: () => this.clearData(),
+      });
+  }
+
+  private clearData() {
+    this.entries.set([]);
+    this.pagination.set(null);
+    this.scrobblingProviders.set([]);
+    this.isLoading.set(false);
+    this.isLoadingMore.set(false);
   }
 
   loadData(reset = true) {
+    if (!this.licenseService.hasValidLicense()) {
+      this.isLoading.set(false);
+      this.isLoadingMore.set(false);
+      return;
+    }
+
     if (reset) {
       this.currentPage.set(0);
       this.entries.set([]);
