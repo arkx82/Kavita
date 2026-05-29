@@ -67,7 +67,11 @@ jobs:
     needs: build-assets
     outputs:
       version: ${{ steps.release-vars.outputs.version }}
+      kavita_version: ${{ steps.release-vars.outputs.kavita_version }}
     steps:
+      - name: Checkout Repo
+        uses: actions/checkout@v4
+
       - name: Resolve release variables
         id: release-vars
         env:
@@ -75,7 +79,19 @@ jobs:
         run: |
           set -euo pipefail
           version="${INPUT_VERSION:-${GITHUB_REF_NAME}-latest}"
+          kavita_version="$(python3 - <<'PY'
+          import xml.etree.ElementTree as ET
+
+          root = ET.parse('Kavita.Common/Kavita.Common.csproj').getroot()
+          version = root.findtext('.//AssemblyVersion')
+          if not version:
+              raise SystemExit('AssemblyVersion not found in Kavita.Common/Kavita.Common.csproj')
+          print(version.strip())
+          PY
+          )"
+
           echo "version=$version" >> "$GITHUB_OUTPUT"
+          echo "kavita_version=$kavita_version" >> "$GITHUB_OUTPUT"
 
       - name: Download package artifacts
         uses: actions/download-artifact@v4
@@ -113,13 +129,14 @@ jobs:
         env:
           DOCKER_KAVITA_PAT: ${{ secrets.DOCKER_KAVITA_PAT }}
           VERSION: ${{ needs.publish-release.outputs.version }}
+          KAVITA_VERSION: ${{ needs.publish-release.outputs.kavita_version }}
         run: |
           set -euo pipefail
 
           if [ -z "$DOCKER_KAVITA_PAT" ]; then
-            echo "DOCKER_KAVITA_PAT is not configured; skipping docker-kavita workflow dispatch."
+            echo "DOCKER_KAVITA_PAT is not configured; cannot dispatch docker-kavita workflow." >&2
             echo "Create a fine-grained token with Actions write access to arkx82/docker-kavita, then save it as DOCKER_KAVITA_PAT."
-            exit 0
+            exit 1
           fi
 
           GH_TOKEN="$DOCKER_KAVITA_PAT" gh workflow run buildx.yml \
@@ -127,4 +144,5 @@ jobs:
             --ref main \
             -f kavita_repo=arkx82/Kavita \
             -f kavita_version="$VERSION" \
+            -f kavita_app_version="$KAVITA_VERSION" \
             -f platforms=linux/amd64,linux/arm64
