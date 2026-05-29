@@ -145,7 +145,7 @@ public class ProcessSeries(
             }
 
             var removePrefix = library.RemovePrefixForSortName;
-            var sortName = removePrefix ? BookSortTitlePrefixHelper.GetSortTitle(series.Name) : series.Name;
+            var sortName = TitleSortHelper.GetSortTitle(series.Name, removePrefix);
 
             if (string.IsNullOrEmpty(series.SortName))
             {
@@ -157,7 +157,7 @@ public class ProcessSeries(
                 series.SortName = sortName;
                 if (!string.IsNullOrEmpty(firstParsedInfo.SeriesSort))
                 {
-                    series.SortName = firstParsedInfo.SeriesSort;
+                    series.SortName = TitleSortHelper.ApplyKoreanInitialSort(firstParsedInfo.SeriesSort);
                 }
             }
 
@@ -441,7 +441,7 @@ public class ProcessSeries(
 
             if (!series.SortNameLocked)
             {
-                series.SortName = removePrefixForSortName ? BookSortTitlePrefixHelper.GetSortTitle(name) : name;
+                series.SortName = TitleSortHelper.GetSortTitle(name, removePrefixForSortName);
             }
 
             if (!series.LocalizedNameLocked)

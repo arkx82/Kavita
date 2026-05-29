@@ -174,4 +174,25 @@ public class BookSortTitlePrefixHelperTests
     {
         Assert.Equal(expected, BookSortTitlePrefixHelper.GetSortTitle(inputString));
     }
+
+    [Theory]
+    [InlineData("앨리스", "ㅇ앨리스")]
+    [InlineData("가나다", "ㄱ가나다")]
+    [InlineData("힐링", "ㅎ힐링")]
+    [InlineData("[앨리스]", "ㅇ앨리스")]
+    [InlineData("앨리스 (완결)", "ㅇ앨리스 (완결)")]
+    [InlineData("The 앨리스", "ㅇ앨리스")]
+    public void TestKoreanInitialSortTitle(string inputString, string expected)
+    {
+        Assert.Equal(expected, TitleSortHelper.GetSortTitle(inputString, true));
+    }
+
+    [Theory]
+    [InlineData("Alice", "Alice")]
+    [InlineData("三国演义", "三国演义")]
+    [InlineData("123", "123")]
+    public void TestKoreanInitialSortTitle_NonHangul(string inputString, string expected)
+    {
+        Assert.Equal(expected, TitleSortHelper.GetSortTitle(inputString, false));
+    }
 }
