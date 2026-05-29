@@ -14,6 +14,7 @@ using Kavita.API.Services.SignalR;
 using Kavita.Common.Helpers;
 using Kavita.Models.Entities;
 using Kavita.Models.Entities.Enums;
+using Kavita.Services;
 using Kavita.Services.Reading;
 using Microsoft.Extensions.Logging;
 using VersOne.Epub;

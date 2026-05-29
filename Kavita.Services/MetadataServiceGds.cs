@@ -17,6 +17,7 @@ using Kavita.Models.DTOs.SignalR;
 using Kavita.Models.Entities;
 using Kavita.Models.Entities.Enums;
 using Kavita.Models.Entities.Interfaces;
+using Kavita.Services;
 using Kavita.Services.Comparators;
 using Microsoft.Extensions.Logging;
 

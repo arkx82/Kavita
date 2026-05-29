@@ -25,6 +25,7 @@ using Kavita.Models.Entities.Enums;
 using Kavita.Models.Entities.Person;
 using Kavita.Models.Metadata;
 using Kavita.Models.Parser;
+using Kavita.Services;
 using Kavita.Services.Builders;
 using Kavita.Services.Extensions;
 using Kavita.Services.Helpers;

@@ -7,6 +7,7 @@ using Kavita.API.Services.Reading;
 using Kavita.API.Services.ReadingLists;
 using Kavita.API.Services.Scanner;
 using Kavita.API.Services.SignalR;
+using Kavita.Services;
 using Kavita.Services.Helpers;
 using Kavita.Services.HostedServices;
 using Kavita.Services.Metadata;
