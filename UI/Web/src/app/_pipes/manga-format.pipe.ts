@@ -22,6 +22,8 @@ export class MangaFormatPipe implements PipeTransform {
         return translate('manga-format-pipe.image');
       case MangaFormat.PDF:
         return translate('manga-format-pipe.pdf');
+      case MangaFormat.TEXT:
+        return translate('manga-format-pipe.text');
       case MangaFormat.UNKNOWN:
         return translate('manga-format-pipe.unknown');
       default:

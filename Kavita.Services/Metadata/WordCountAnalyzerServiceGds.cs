@@ -12,6 +12,7 @@ using Kavita.API.Services;
 using Kavita.API.Services.Helpers;
 using Kavita.API.Services.SignalR;
 using Kavita.Common.Helpers;
+using Kavita.Models.DTOs.SignalR;
 using Kavita.Models.Entities;
 using Kavita.Models.Entities.Enums;
 using Kavita.Services;
@@ -76,7 +77,7 @@ public class WordCountAnalyzerServiceGds : IWordCountAnalyzerServiceGds
             var seriesIndex = 0;
             foreach (var series in nonLibrarySeries)
             {
-                var index = chunk * seriesIndex;
+                var index = (chunk - 1) * chunkInfo.ChunkSize + seriesIndex;
                 var progress = Math.Max(0F, Math.Min(1F, index * 1F / chunkInfo.TotalSize));
                 await _eventHub.SendMessageAsync(MessageFactory.NotificationProgress,
                     MessageFactory.WordCountAnalyzerProgressEvent(library.Id, progress, ProgressEventType.Updated, series.Name), ct: ct);
@@ -225,7 +226,7 @@ public class WordCountAnalyzerServiceGds : IWordCountAnalyzerServiceGds
                         foreach (var file in chapter.Files)
                         {
                             var all = File.ReadAllText(file.FilePath);
-                            sum += all.Length;
+                            sum += WordCountAnalyzerService.GetWordCount(all.Count(char.IsLetter));
                         }
 
                         chapter.WordCount = sum;

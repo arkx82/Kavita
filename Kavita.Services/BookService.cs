@@ -104,7 +104,7 @@ public partial class BookService(
 
     public int GetTextLinesPerPage()
     {
-        return Configuration.TextLinesPerPage;
+        return Kavita.Common.Configuration.TextLinesPerPage;
     }
 
     private static bool HasClickableHrefPart(HtmlNode anchor)

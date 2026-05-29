@@ -752,6 +752,7 @@
         "archive": "Archive",
         "image": "Image",
         "pdf": "PDF",
+        "text": "Text",
         "unknown": "Unknown"
     },
 
@@ -761,7 +762,8 @@
         "manga": "Manga",
         "comicVine": "Comic",
         "image": "Image",
-        "lightNovel": "Light Novel"
+        "lightNovel": "Light Novel",
+        "gds": "GDS"
     },
 
     "library-type-subtitle-pipe": {
@@ -770,7 +772,8 @@
         "manga": "Japanese comics with volume grouping support. Also handles some loose image configurations.",
         "comicVine": "Strict comic implementation based on Comic Vine metadata with integration for specialized tooling.",
         "image": "Loose image files with limited support. Must largely follow wiki documentation.",
-        "lightNovel": "Book library with special handling optimized for light novels"
+        "lightNovel": "Book library with special handling optimized for light novels",
+        "gds": "Library driven by GDS kavita.yaml metadata files."
     },
 
     "age-rating-pipe": {
@@ -1650,7 +1653,8 @@
         "archive": "Archive",
         "epub": "Epub",
         "pdf": "Pdf",
-        "image": "Image"
+        "image": "Image",
+        "text": "Text"
     },
 
     "reader-settings": {

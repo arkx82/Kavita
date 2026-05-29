@@ -19,6 +19,7 @@ using Kavita.Models.Entities.Enums;
 using Kavita.Models.Entities.Interfaces;
 using Kavita.Services;
 using Kavita.Services.Comparators;
+using Kavita.Services.Extensions;
 using Microsoft.Extensions.Logging;
 
 namespace Kavita.Services;
@@ -92,6 +93,7 @@ public class MetadataServiceGds : IMetadataServiceGds
                 else if (gdsFile.Cover == "TEXT")
                 {
                     chapter.CoverImage = "text.png";
+                    handledByGds = true;
                     _imageService.UpdateColorScape(chapter);
                     _unitOfWork.ChapterRepository.Update(chapter);
                 }
@@ -390,7 +392,7 @@ public class MetadataServiceGds : IMetadataServiceGds
             var seriesIndex = 0;
             foreach (var series in nonLibrarySeries)
             {
-                var index = chunk * seriesIndex;
+                var index = (chunk - 1) * chunkInfo.ChunkSize + seriesIndex;
                 var progress = Math.Max(0F, Math.Min(1F, index * 1F / chunkInfo.TotalSize));
                 await _eventHub.SendMessageAsync(MessageFactory.NotificationProgress,
                     MessageFactory.CoverUpdateProgressEvent(library.Id, progress, ProgressEventType.Updated, series.Name), ct: ct);

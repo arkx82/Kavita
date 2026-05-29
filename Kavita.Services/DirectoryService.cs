@@ -763,8 +763,8 @@ public class DirectoryService : IDirectoryService
         {
             if (!forceCheck && seriesPaths.TryGetValue(Parser.NormalizePath(directory), out var seriesInDir))
             {
-                var directoryInfo = new FileInfo(directory);
-                if (seriesInDir.Count > 0 && directoryInfo.LastWriteTime < seriesInDir[0].LastScanned)
+                var lastWriteTime = GetLastWriteTime(directory);
+                if (seriesInDir.Count > 0 && seriesInDir.All(s => lastWriteTime < s.LastScanned))
                 {
                     result.Add(new ScanResult
                     {
@@ -808,24 +808,31 @@ public class DirectoryService : IDirectoryService
     /// <summary>
     /// Recursively scans a folder and returns the max last write time on any folders and files
     /// </summary>
-    /// <remarks>If the folder is empty or non-existent, this will return MaxValue for a DateTime</remarks>
+    /// <remarks>If the folder is empty, this will return the directory's last write time. If the folder is non-existent or inaccessible, this will return MaxValue for a DateTime</remarks>
     /// <param name="folderPath"></param>
     /// <returns>Max Last Write Time</returns>
     public DateTime GetLastWriteTime(string folderPath)
     {
         if (!FileSystem.Directory.Exists(folderPath)) return DateTime.MaxValue;
 
-        var fileEntries = FileSystem.Directory.GetFileSystemEntries(folderPath, "*.*", SearchOption.AllDirectories);
-        if (fileEntries.Length == 0) return DateTime.MaxValue;
+        try
+        {
+            var directoryLastWriteTime = FileSystem.Directory.GetLastWriteTime(folderPath);
+            var fileEntries = FileSystem.Directory.GetFileSystemEntries(folderPath, "*", SearchOption.AllDirectories);
+            if (fileEntries.Length == 0) return directoryLastWriteTime;
 
-        // Find the max last write time of the files
-        var maxFiles = fileEntries.Max(path => FileSystem.File.GetLastWriteTime(path));
+            // Find the max last write time of the files
+            var maxFiles = fileEntries.Max(path => FileSystem.File.GetLastWriteTime(path));
 
-        // Get the last write time of the directory itself
-        var directoryLastWriteTime = FileSystem.Directory.GetLastWriteTime(folderPath);
+            // Use comparison to get the max DateTime value
+            return directoryLastWriteTime > maxFiles ? directoryLastWriteTime : maxFiles;
+        }
+        catch (Exception ex) when (ex is UnauthorizedAccessException or DirectoryNotFoundException or IOException)
+        {
+            _logger.LogDebug(ex, "Unable to determine last write time for {FolderPath}", folderPath);
 
-        // Use comparison to get the max DateTime value
-        return directoryLastWriteTime > maxFiles ? directoryLastWriteTime : maxFiles;
+            return DateTime.MaxValue;
+        }
     }
 
 

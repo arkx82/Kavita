@@ -1,6 +1,7 @@
 using System.Threading;
 using System.Threading.Tasks;
 using Hangfire;
+using Kavita.Services;
 
 namespace Kavita.Services.Metadata;
 

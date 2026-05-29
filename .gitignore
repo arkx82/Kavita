@@ -549,3 +549,10 @@ Kavita.Server/config/appsettings.*.json
 
 # Old installs might have this as a default location
 API/config/bookmarks/
+
+.codesight/
+.vscode/
+.github/
+
+build-mac.sh
+build.sh
