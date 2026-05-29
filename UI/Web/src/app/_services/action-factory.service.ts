@@ -371,6 +371,17 @@ export class ActionFactoryService {
             children: [],
           },
           {
+            action: Action.ResetSortIndex,
+            title: 'reset-sort-index',
+            description: 'reset-sort-index-tooltip',
+
+            callback: this.dummyCallback,
+            shouldRender: this.dummyShouldRender,
+
+            requiredRoles: [Role.Admin],
+            children: [],
+          },
+          {
             action: Action.Delete,
             title: 'delete',
             description: 'delete-tooltip',

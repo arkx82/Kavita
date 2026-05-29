@@ -133,6 +133,10 @@ export class LibraryService {
     return this.httpClient.post(this.baseUrl + 'library/refresh-metadata-multiple?forceColorscape=' + forceColorscape, {ids: libraryIds, force: force});
   }
 
+  resetSortIndex(libraryId: number) {
+    return this.httpClient.post(this.baseUrl + `library/reset-sort-index?libraryId=${libraryId}`, {});
+  }
+
   copySettingsFromLibrary(sourceLibraryId: number, targetLibraryIds: Array<number>, includeType: boolean) {
     return this.httpClient.post(this.baseUrl + 'library/copy-settings-from', {sourceLibraryId, targetLibraryIds, includeType});
   }

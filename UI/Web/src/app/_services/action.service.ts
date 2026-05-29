@@ -139,6 +139,14 @@ export class ActionService {
           map(() => this.fromAction(action, library, 'none'))
         );
 
+      case Action.ResetSortIndex:
+        return from(this.confirmService.confirm(translate('toasts.confirm-reset-sort-index'))).pipe(
+          filter(confirmed => confirmed),
+          switchMap(() => this.libraryService.resetSortIndex(library.id)),
+          tap(() => this.toastr.info(translate('toasts.reset-sort-index-queued', {name: library.name}))),
+          map(() => this.fromAction(action, library, 'none'))
+        );
+
       case Action.Delete:
         return from(this.confirmService.alert(translate('toasts.confirm-library-delete'))).pipe(
           filter(confirmed => confirmed),

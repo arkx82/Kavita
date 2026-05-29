@@ -488,6 +488,47 @@ public class SeriesService(
     }
 
     /// <summary>
+    /// Recalculates sort names for every series in a library using the same title sort rules as scanning.
+    /// </summary>
+    /// <remarks>
+    /// By default, user-locked sort names are preserved to match scan behavior.
+    /// </remarks>
+    public Task ResetSortIndex(int libraryId, bool bypassSortNameLock = false)
+    {
+        return ResetSortIndex(libraryId, bypassSortNameLock, CancellationToken.None);
+    }
+
+    public async Task ResetSortIndex(int libraryId, bool bypassSortNameLock, CancellationToken ct)
+    {
+        var library = await unitOfWork.LibraryRepository.GetLibraryForIdAsync(libraryId, ct: ct);
+        if (library == null) return;
+
+        var series = (await unitOfWork.SeriesRepository.GetSeriesForLibraryIdAsync(libraryId, SeriesIncludes.None, ct)).ToList();
+        var updated = 0;
+
+        foreach (var item in series)
+        {
+            if (item.SortNameLocked && !bypassSortNameLock) continue;
+
+            var newSortName = TitleSortHelper.GetSortTitle(item.Name, library.RemovePrefixForSortName);
+            if (item.SortName == newSortName) continue;
+
+            item.SortName = newSortName;
+            unitOfWork.SeriesRepository.Update(item);
+            updated++;
+        }
+
+        if (updated > 0)
+        {
+            await unitOfWork.CommitAsync(ct);
+        }
+
+        logger.LogInformation("Reset sort index for library {LibraryId}. Updated {UpdatedCount} series", libraryId, updated);
+        await eventHub.SendMessageAsync(MessageFactory.LibraryModified,
+            MessageFactory.LibraryModifiedEvent(libraryId, "reset-sort-index"), false, ct);
+    }
+
+    /// <summary>
     /// This generates all the arrays needed by the Series Detail page in the UI. It is a specialized API for the unique layout constraints.
     /// </summary>
     /// <param name="seriesId"></param>

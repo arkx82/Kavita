@@ -498,6 +498,20 @@ public class TaskScheduler : ITaskScheduler
         BackgroundJob.Enqueue(() => _metadataService.GenerateCoversForLibrary(libraryId, forceUpdate, forceColorscape));
     }
 
+    public Task ResetSortIndex(int libraryId, bool bypassSortNameLock = false)
+    {
+        if (HasAlreadyEnqueuedTask(nameof(ISeriesService), nameof(ISeriesService.ResetSortIndex), [libraryId, bypassSortNameLock], DefaultQueue, true))
+        {
+            _logger.LogInformation("A duplicate request to reset sort index for library occured. Skipping");
+            return Task.CompletedTask;
+        }
+
+        _logger.LogInformation("Enqueuing library sort index reset for: {LibraryId}", libraryId);
+        BackgroundJob.Enqueue<ISeriesService>(service => service.ResetSortIndex(libraryId, bypassSortNameLock));
+
+        return Task.CompletedTask;
+    }
+
     public async Task RefreshSeriesMetadata(int libraryId, int seriesId, bool forceUpdate = false, bool forceColorscape = false)
     {
         if (HasAlreadyEnqueuedTask(MetadataService.Name,"GenerateCoversForSeries", [libraryId, seriesId, forceUpdate, forceColorscape]))

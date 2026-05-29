@@ -126,4 +126,8 @@ export enum Action {
   Navigate = 38,
   AddToDashboard = 39,
   AddToSideNav = 40,
+  /**
+   * Recalculate sort names for a library
+   */
+  ResetSortIndex = 41,
 }

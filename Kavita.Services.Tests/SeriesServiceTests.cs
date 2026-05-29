@@ -14,6 +14,7 @@ using Kavita.Models.DTOs;
 using Kavita.Models.DTOs.Metadata;
 using Kavita.Models.DTOs.Person;
 using Kavita.Models.DTOs.SeriesDetail;
+using Kavita.Models.DTOs.SignalR;
 using Kavita.Models.Entities;
 using Kavita.Models.Entities.Enums;
 using Kavita.Models.Entities.Metadata;
@@ -52,11 +53,14 @@ public class SeriesServiceTests(ITestOutputHelper outputHelper): AbstractDbTest(
     private ISeriesService Setup(IUnitOfWork unitOfWork)
     {
         var ds = new DirectoryService(Substitute.For<ILogger<DirectoryService>>(), new FileSystem());
+        var eventHub = Substitute.For<IEventHub>();
+        eventHub.SendMessageAsync(Arg.Any<string>(), Arg.Any<SignalRMessage>(), Arg.Any<bool>(), Arg.Any<CancellationToken>())
+            .Returns(Task.CompletedTask);
 
         var locService = new LocalizationService(ds, new MockHostingEnvironment(),
             Substitute.For<IMemoryCache>(), Substitute.For<IUnitOfWork>(), Substitute.For<IUserContext>());
 
-        return new SeriesService(unitOfWork, Substitute.For<IEventHub>(),
+        return new SeriesService(unitOfWork, eventHub,
             Substitute.For<ITaskScheduler>(), Substitute.For<ILogger<SeriesService>>(), locService,
             Substitute.For<IReadingListService>(), new EntityNamingService());
     }
@@ -80,6 +84,56 @@ public class SeriesServiceTests(ITestOutputHelper outputHelper): AbstractDbTest(
             Editions = new List<int>(),
             Annuals = new List<int>()
         };
+    }
+
+    #endregion
+
+    #region ResetSortIndex
+
+    [Fact]
+    public async Task ResetSortIndex_ShouldRespectLockedSortName()
+    {
+        var (unitOfWork, context, _) = await CreateDatabase();
+        var seriesService = Setup(unitOfWork);
+        var unlockedSeries = new SeriesBuilder("앨리스").Build();
+        unlockedSeries.SortName = "Old Sort";
+        var lockedSeries = new SeriesBuilder("바나나").Build();
+        lockedSeries.SortName = "Custom Sort";
+        lockedSeries.SortNameLocked = true;
+
+        var library = new LibraryBuilder("Test Lib")
+            .WithSeries(unlockedSeries)
+            .WithSeries(lockedSeries)
+            .Build();
+        context.Library.Add(library);
+
+        await context.SaveChangesAsync();
+
+        await seriesService.ResetSortIndex(library.Id);
+
+        Assert.Equal("ㅇ앨리스", unlockedSeries.SortName);
+        Assert.Equal("Custom Sort", lockedSeries.SortName);
+    }
+
+    [Fact]
+    public async Task ResetSortIndex_ShouldBypassLockedSortNameWhenRequested()
+    {
+        var (unitOfWork, context, _) = await CreateDatabase();
+        var seriesService = Setup(unitOfWork);
+        var series = new SeriesBuilder("바나나").Build();
+        series.SortName = "Custom Sort";
+        series.SortNameLocked = true;
+
+        var library = new LibraryBuilder("Test Lib")
+            .WithSeries(series)
+            .Build();
+        context.Library.Add(library);
+
+        await context.SaveChangesAsync();
+
+        await seriesService.ResetSortIndex(library.Id, true);
+
+        Assert.Equal("ㅂ바나나", series.SortName);
     }
 
     #endregion

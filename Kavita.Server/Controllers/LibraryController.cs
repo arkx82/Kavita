@@ -385,6 +385,15 @@ public class LibraryController(
         return Ok();
     }
 
+    [HttpPost("reset-sort-index")]
+    [Authorize(Policy = PolicyGroups.AdminPolicy)]
+    public async Task<ActionResult> ResetSortIndex(int libraryId, bool bypassSortNameLock = false)
+    {
+        if (libraryId <= 0) return BadRequest(await localizationService.TranslateAsync(UserId, "greater-0", "libraryId"));
+        await taskScheduler.ResetSortIndex(libraryId, bypassSortNameLock);
+        return Ok();
+    }
+
     [Authorize(Policy = PolicyGroups.AdminPolicy)]
     [HttpPost("refresh-metadata-multiple")]
     public ActionResult RefreshMetadataMultiple(BulkActionDto dto, bool forceColorscape = true)
