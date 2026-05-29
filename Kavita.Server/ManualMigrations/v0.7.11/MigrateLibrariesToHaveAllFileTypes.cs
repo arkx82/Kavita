@@ -60,6 +60,30 @@ public class MigrateLibrariesToHaveAllFileTypes : ManualMigration
                         FileTypeGroup = FileTypeGroup.Images
                     });
                     break;
+                case LibraryType.GDS:
+                    library.LibraryFileTypes.Add(new LibraryFileTypeGroup()
+                    {
+                        FileTypeGroup = FileTypeGroup.Archive
+                    });
+                    library.LibraryFileTypes.Add(new LibraryFileTypeGroup()
+                    {
+                        FileTypeGroup = FileTypeGroup.Epub
+                    });
+                    library.LibraryFileTypes.Add(new LibraryFileTypeGroup()
+                    {
+                        FileTypeGroup = FileTypeGroup.Images
+                    });
+                    library.LibraryFileTypes.Add(new LibraryFileTypeGroup()
+                    {
+                        FileTypeGroup = FileTypeGroup.Pdf
+                    });
+                    library.LibraryFileTypes.Add(new LibraryFileTypeGroup()
+                    {
+                        FileTypeGroup = FileTypeGroup.Text
+                    });
+                    break;
+                default:
+                    break;
             }
         }
 

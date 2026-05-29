@@ -34,5 +34,10 @@ public enum MangaFormat
     /// PDF File
     /// </summary>
     [Description("PDF")]
-    Pdf = 4
+    Pdf = 4,
+    /// <summary>
+    /// Text File
+    /// </summary>
+    [Description("Text")]
+    Text = 5
 }

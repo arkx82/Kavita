@@ -35,4 +35,9 @@ public enum LibraryType
     /// </summary>
     [Description("Comic")]
     ComicVine = 5,
+    /// <summary>
+    /// Uses GDS yaml metadata to drive parsing
+    /// </summary>
+    [Description("GDS")]
+    GDS = 6,
 }

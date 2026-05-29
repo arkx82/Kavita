@@ -17,6 +17,7 @@ public static class Configuration
     public const long DefaultCacheMemory = 75;
     public const string DefaultOidcAuthority = "";
     public const string DefaultOidcClientId = "kavita";
+    public const int DefaultTextLinesPerPage = 30;
     private static readonly string AppSettingsFilename = Path.Join("config", GetAppSettingFilename());
 
     public static readonly string KavitaPlusApiUrl = GetKavitaPlusApiUrl();
@@ -74,6 +75,8 @@ public static class Configuration
     }
 
     public static bool AllowIFraming => GetAllowIFraming(GetAppSettingFilename());
+
+    public static int TextLinesPerPage => DefaultTextLinesPerPage;
 
     private static string GetAppSettingFilename()
     {
