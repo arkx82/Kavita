@@ -1,0 +1,130 @@
+name: GDS Docker Assets
+
+on:
+  push:
+    branches:
+      - gds
+  workflow_dispatch:
+    inputs:
+      version:
+        description: Release tag to create or update in arkx82/Kavita
+        required: true
+        default: gds-latest
+      prerelease:
+        description: Mark the GitHub release as prerelease
+        required: true
+        default: true
+        type: boolean
+      dispatch_docker:
+        description: Trigger arkx82/docker-kavita buildx after assets are uploaded
+        required: true
+        default: true
+        type: boolean
+
+permissions:
+  contents: write
+
+jobs:
+  build-assets:
+    name: Build ${{ matrix.rid }} asset
+    runs-on: ubuntu-24.04
+    strategy:
+      fail-fast: false
+      matrix:
+        rid:
+          - linux-x64
+          - linux-arm64
+    steps:
+      - name: Checkout Repo
+        uses: actions/checkout@v4
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: 22
+
+      - name: Setup .NET SDK
+        uses: actions/setup-dotnet@v4
+        with:
+          dotnet-version: 10.0.x
+
+      - name: Install Swashbuckle CLI
+        run: dotnet tool install -g Swashbuckle.AspNetCore.Cli
+
+      - name: Build Kavita package
+        run: ./build.sh ${{ matrix.rid }}
+
+      - name: Upload package artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: kavita-${{ matrix.rid }}
+          path: _output/kavita-${{ matrix.rid }}.tar.gz
+          if-no-files-found: error
+
+  publish-release:
+    name: Publish GDS release assets
+    runs-on: ubuntu-24.04
+    needs: build-assets
+    outputs:
+      version: ${{ steps.release-vars.outputs.version }}
+    steps:
+      - name: Resolve release variables
+        id: release-vars
+        env:
+          INPUT_VERSION: ${{ github.event.inputs.version }}
+        run: |
+          set -euo pipefail
+          version="${INPUT_VERSION:-${GITHUB_REF_NAME}-latest}"
+          echo "version=$version" >> "$GITHUB_OUTPUT"
+
+      - name: Download package artifacts
+        uses: actions/download-artifact@v4
+        with:
+          pattern: kavita-linux-*
+          path: dist
+          merge-multiple: true
+
+      - name: Create or update GitHub release
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          VERSION: ${{ steps.release-vars.outputs.version }}
+          PRERELEASE: ${{ github.event.inputs.prerelease || 'true' }}
+        run: |
+          set -euo pipefail
+
+          release_args=(--repo "$GITHUB_REPOSITORY" --title "$VERSION" --notes "GDS-enabled Kavita build assets for Docker image publishing.")
+          if [ "$PRERELEASE" = "true" ]; then
+            release_args+=(--prerelease)
+          fi
+
+          if gh release view "$VERSION" --repo "$GITHUB_REPOSITORY" >/dev/null 2>&1; then
+            gh release upload "$VERSION" dist/kavita-linux-x64.tar.gz dist/kavita-linux-arm64.tar.gz --repo "$GITHUB_REPOSITORY" --clobber
+          else
+            gh release create "$VERSION" dist/kavita-linux-x64.tar.gz dist/kavita-linux-arm64.tar.gz "${release_args[@]}"
+          fi
+
+  dispatch-docker:
+    name: Trigger docker-kavita image build
+    runs-on: ubuntu-24.04
+    needs: publish-release
+    if: ${{ github.event_name == 'push' || inputs.dispatch_docker }}
+    steps:
+      - name: Trigger arkx82/docker-kavita buildx workflow
+        env:
+          DOCKER_KAVITA_PAT: ${{ secrets.DOCKER_KAVITA_PAT }}
+          VERSION: ${{ needs.publish-release.outputs.version }}
+        run: |
+          set -euo pipefail
+
+          if [ -z "$DOCKER_KAVITA_PAT" ]; then
+            echo "DOCKER_KAVITA_PAT is not configured; skipping docker-kavita workflow dispatch."
+            echo "Create a fine-grained token with Actions write access to arkx82/docker-kavita, then save it as DOCKER_KAVITA_PAT."
+            exit 0
+          fi
+
+          GH_TOKEN="$DOCKER_KAVITA_PAT" gh workflow run buildx.yml \
+            --repo arkx82/docker-kavita \
+            --ref main \
+            -f kavita_repo=arkx82/Kavita \
+            -f kavita_version="$VERSION" \
+            -f platforms=linux/amd64,linux/arm64

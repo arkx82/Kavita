@@ -552,7 +552,6 @@ API/config/bookmarks/
 
 .codesight/
 .vscode/
-.github/
 
 build-mac.sh
 build.sh
