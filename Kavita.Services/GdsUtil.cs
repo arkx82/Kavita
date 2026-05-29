@@ -18,6 +18,7 @@ public static class GdsUtil
             var lines = File.ReadAllLines(filePath, Encoding.UTF8);
             var deserializer = new DeserializerBuilder()
                 .WithNamingConvention(UnderscoredNamingConvention.Instance)
+                .IgnoreUnmatchedProperties()
                 .Build();
             return deserializer.Deserialize<GdsInfo>(string.Join("\n", lines));
         }

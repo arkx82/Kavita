@@ -19,9 +19,11 @@ using Kavita.Common.Extensions;
 using Kavita.Common.Helpers;
 using Kavita.Models.Builders;
 using Kavita.Models.DTOs.KavitaPlus.Metadata;
+using Kavita.Models.DTOs.Person;
 using Kavita.Models.DTOs.SignalR;
 using Kavita.Models.Entities;
 using Kavita.Models.Entities.Enums;
+using Kavita.Models.Entities.Metadata;
 using Kavita.Models.Entities.Person;
 using Kavita.Models.Metadata;
 using Kavita.Models.Parser;
@@ -325,12 +327,16 @@ public class ProcessSeries(
         series.Metadata ??= new SeriesMetadataBuilder().Build();
         var firstChapter = SeriesService.GetFirstChapterForMetadata(series);
 
-        var firstFile = firstChapter?.Files.FirstOrDefault();
-        if (firstFile == null) return;
-
         var chapters = series.Volumes
             .SelectMany(volume => volume.Chapters)
             .ToList();
+
+        var firstFile = firstChapter?.Files.FirstOrDefault();
+        if (firstFile == null)
+        {
+            await UpdateSeriesMetadataFromGds(databasePeople, series, gdsInfo, library.RemovePrefixForSortName);
+            return;
+        }
 
         // Update Metadata based on Chapter metadata
         if (!series.Metadata.ReleaseYearLocked)
@@ -417,6 +423,167 @@ public class ProcessSeries(
 
         #endregion
 
+        await UpdateSeriesMetadataFromGds(databasePeople, series, gdsInfo, library.RemovePrefixForSortName);
+
+    }
+
+    private async Task UpdateSeriesMetadataFromGds(Dictionary<string, Person> databasePeople, Series series, GdsInfo? gdsInfo, bool removePrefixForSortName)
+    {
+        if (gdsInfo?.Meta == null || gdsInfo.Meta.Count == 0) return;
+
+        var metadata = series.Metadata;
+        var meta = gdsInfo.Meta;
+
+        if (TryGetGdsMetaValue(meta, "Name", out var name))
+        {
+            series.Name = name;
+            series.NormalizedName = name.ToNormalized();
+
+            if (!series.SortNameLocked)
+            {
+                series.SortName = removePrefixForSortName ? BookSortTitlePrefixHelper.GetSortTitle(name) : name;
+            }
+
+            if (!series.LocalizedNameLocked)
+            {
+                series.LocalizedName = name;
+                series.NormalizedLocalizedName = name.ToNormalized();
+            }
+        }
+
+        if (!metadata.ReleaseYearLocked && TryGetGdsMetaInt(meta, "Year", out var year) && NumberHelper.IsValidYear(year))
+        {
+            metadata.ReleaseYear = year;
+        }
+
+        if (!metadata.AgeRatingLocked && TryGetGdsMetaEnum(meta, "Age Rating", out AgeRating ageRating))
+        {
+            metadata.AgeRating = ageRating;
+        }
+
+        if (!metadata.PublicationStatusLocked && TryGetGdsMetaEnum(meta, "Publication Status", out PublicationStatus publicationStatus))
+        {
+            metadata.PublicationStatus = publicationStatus;
+        }
+
+        if (!metadata.SummaryLocked && TryGetGdsMetaValue(meta, "Summary", out var summary))
+        {
+            metadata.Summary = summary;
+        }
+
+        if (!metadata.LanguageLocked && TryGetGdsMetaValue(meta, "Language", out var language))
+        {
+            metadata.Language = language;
+        }
+
+        if (TryGetGdsMetaValue(meta, "Web Links", out var webLinks))
+        {
+            metadata.WebLinks = string.Join(',', webLinks.SplitBy(','));
+            series.AniListId = ExternalIdParser.GetAniListId(metadata.WebLinks) ?? 0;
+            series.MalId = ExternalIdParser.GetMalId(metadata.WebLinks) ?? 0;
+            series.ComicVineId = ExternalIdParser.GetComicVineId(metadata.WebLinks).Item1;
+            series.MangaBakaId = ExternalIdParser.GetMangaBakaId(metadata.WebLinks);
+        }
+
+        if (!metadata.TagsLocked && TryGetGdsMetaValues(meta, "Tags", out var tags))
+        {
+            await TagHelper.UpdateEntityTags(metadata.Tags, tags, unitOfWork.DataContext.Tag, unitOfWork, false);
+        }
+
+        if (!metadata.GenresLocked && TryGetGdsMetaValues(meta, "Genres", out var genres))
+        {
+            await TagHelper.UpdateEntityTags(metadata.Genres, genres, unitOfWork.DataContext.Genre, unitOfWork, false);
+        }
+
+        await UpdateGdsPeople(metadata, meta, databasePeople, PersonRole.Writer, "Person Writers", "Person Writer", "Writer");
+        await UpdateGdsPeople(metadata, meta, databasePeople, PersonRole.Publisher, "Person Publisher", "Publisher");
+        await UpdateGdsPeople(metadata, meta, databasePeople, PersonRole.Character, "Person Character", "Character");
+        await UpdateGdsPeople(metadata, meta, databasePeople, PersonRole.Colorist, "Person Colorist", "Colorist");
+        await UpdateGdsPeople(metadata, meta, databasePeople, PersonRole.CoverArtist, "Person CoverArtist", "Person Cover Artist", "Cover Artist");
+        await UpdateGdsPeople(metadata, meta, databasePeople, PersonRole.Editor, "Person Editor", "Editor");
+        await UpdateGdsPeople(metadata, meta, databasePeople, PersonRole.Imprint, "Person Imprint", "Imprint");
+        await UpdateGdsPeople(metadata, meta, databasePeople, PersonRole.Inker, "Person Inker", "Inker");
+        await UpdateGdsPeople(metadata, meta, databasePeople, PersonRole.Letterer, "Person Letterer", "Letterer");
+        await UpdateGdsPeople(metadata, meta, databasePeople, PersonRole.Location, "Person Location", "Location");
+        await UpdateGdsPeople(metadata, meta, databasePeople, PersonRole.Penciller, "Person Penciller", "Penciller");
+        await UpdateGdsPeople(metadata, meta, databasePeople, PersonRole.Team, "Person Team", "Team");
+        await UpdateGdsPeople(metadata, meta, databasePeople, PersonRole.Translator, "Person Translator", "Translator");
+    }
+
+    private async Task UpdateGdsPeople(SeriesMetadata metadata, IDictionary<string, string> meta, Dictionary<string, Person> databasePeople, PersonRole role, params string[] keys)
+    {
+        if (metadata.IsPersonRoleLocked(role)) return;
+        if (!TryGetGdsMetaValues(meta, keys, out var people)) return;
+
+        var personDtos = people
+            .Select(person => new PersonDto { Name = person })
+            .ToList();
+
+        await SeriesService.HandlePeopleUpdateAsync(metadata, personDtos, role, unitOfWork);
+
+        foreach (var person in metadata.People.Where(p => p.Role == role).Select(p => p.Person))
+        {
+            databasePeople.TryAdd(person.NormalizedName, person);
+        }
+    }
+
+    private static bool TryGetGdsMetaValue(IDictionary<string, string> meta, string key, out string value)
+    {
+        value = string.Empty;
+
+        if (!meta.TryGetValue(key, out var metaValue))
+        {
+            var match = meta.FirstOrDefault(pair => string.Equals(pair.Key, key, StringComparison.OrdinalIgnoreCase));
+            metaValue = match.Value;
+        }
+
+        if (string.IsNullOrWhiteSpace(metaValue)) return false;
+
+        value = metaValue.Trim();
+        return true;
+    }
+
+    private static bool TryGetGdsMetaValues(IDictionary<string, string> meta, string key, out IList<string> values)
+    {
+        values = [];
+        if (!TryGetGdsMetaValue(meta, key, out var value)) return false;
+
+        values = value.SplitBy(',');
+        return values.Count > 0;
+    }
+
+    private static bool TryGetGdsMetaValues(IDictionary<string, string> meta, string[] keys, out IList<string> values)
+    {
+        values = [];
+
+        foreach (var key in keys)
+        {
+            if (TryGetGdsMetaValues(meta, key, out values)) return true;
+        }
+
+        return false;
+    }
+
+    private static bool TryGetGdsMetaInt(IDictionary<string, string> meta, string key, out int value)
+    {
+        value = 0;
+        return TryGetGdsMetaValue(meta, key, out var rawValue) && int.TryParse(rawValue, NumberStyles.Integer, CultureInfo.InvariantCulture, out value);
+    }
+
+    private static bool TryGetGdsMetaEnum<T>(IDictionary<string, string> meta, string key, out T value) where T : struct, Enum
+    {
+        value = default;
+        if (!TryGetGdsMetaValue(meta, key, out var rawValue)) return false;
+
+        if (int.TryParse(rawValue, NumberStyles.Integer, CultureInfo.InvariantCulture, out var numericValue))
+        {
+            if (!Enum.IsDefined(typeof(T), numericValue)) return false;
+
+            value = (T) Enum.ToObject(typeof(T), numericValue);
+            return true;
+        }
+
+        return Enum.TryParse(rawValue, true, out value) && Enum.IsDefined(value);
     }
 
     /// <summary>
