@@ -952,7 +952,7 @@ export class BookReaderComponent implements OnInit, AfterViewInit, OnDestroy {
 
 
     this.bookService.getBookInfo(this.chapterId, true).subscribe(async (info) => {
-      if (this.readingListMode && info.seriesFormat !== MangaFormat.EPUB) {
+      if (this.readingListMode && info.seriesFormat !== MangaFormat.EPUB && info.seriesFormat !== MangaFormat.TEXT) {
         // Redirect to the manga reader.
         const params = this.readerService.getQueryParamsObject(this.incognitoMode(), this.readingListMode, this.readingListId);
         await this.router.navigate(this.readerService.getNavigationArray(info.libraryId, info.seriesId, this.chapterId, info.seriesFormat), {queryParams: params});
