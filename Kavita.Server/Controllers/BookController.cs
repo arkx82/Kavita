@@ -166,6 +166,11 @@ public class BookController(
                 await unitOfWork.UserTableOfContentRepository.GetPersonalToCForPage(UserId, chapterId, page);
             var annotations = await unitOfWork.UserRepository.GetAnnotationsByPage(UserId, chapter.Id, page);
 
+            if (chapter.Files.First().Format == MangaFormat.Text)
+            {
+                return Ok(await bookService.GetBookPageText(page, chapterId, path, baseUrl));
+            }
+
             return Ok(await bookService.GetBookPage(UserId, page, chapterId, path, baseUrl, ptocBookmarks, annotations));
         }
         catch (KavitaException ex)
