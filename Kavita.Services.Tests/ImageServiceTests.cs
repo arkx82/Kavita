@@ -18,6 +18,8 @@ public class ImageServiceTests
     [Theory]
     [InlineData("[사마달] 흑천룡")]
     [InlineData("[검궁인]江湖百八計")]
+    [InlineData("[서효원&이광주] 무검무존")]
+    [InlineData("A <B> & C")]
     public void CreateTextCoverImage_ShouldGenerateCover_ForNonLatinTitles(string title)
     {
         var outputDirectory = Path.Join(Path.GetTempPath(), $"kavita-text-cover-{Guid.NewGuid():N}");

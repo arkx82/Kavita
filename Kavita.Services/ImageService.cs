@@ -3,6 +3,7 @@ using System.Collections.Generic;
 using System.IO;
 using System.Linq;
 using System.Numerics;
+using System.Security;
 using System.Threading;
 using System.Threading.Tasks;
 using Flurl.Http;
@@ -794,6 +795,7 @@ public class ImageService(ILogger<ImageService> logger, IDirectoryService direct
         try
         {
             var displayTitle = title.Length > 80 ? title[..77] + "..." : title;
+            var markupSafeTitle = SecurityElement.Escape(displayTitle) ?? string.Empty;
 
             // Build solid dark-blue background (28, 40, 65)
             using var rChannel = Image.Black(width, height) + 28.0;
@@ -804,7 +806,7 @@ public class ImageService(ILogger<ImageService> logger, IDirectoryService direct
             using var bgAlpha = bgSrgb.Bandjoin(255.0);
 
             // Render white text on transparent background
-            using var textImg = Image.Text(displayTitle, font: "sans bold 32",
+            using var textImg = Image.Text(markupSafeTitle, font: "sans bold 32",
                 width: width - 60, rgba: true, align: Enums.Align.Centre);
 
             var textX = (width - textImg.Width) / 2;
