@@ -147,13 +147,30 @@ public class ReadingItemService : IReadingItemService
         }
 
 
+        if (format == MangaFormat.Text)
+        {
+            var dir = Path.GetDirectoryName(filePath);
+            if (!string.IsNullOrEmpty(dir))
+            {
+                foreach (var ext in new[] { "jpg", "jpeg", "png", "webp" })
+                {
+                    var coverPath = Path.Join(dir, $"cover.{ext}");
+                    if (File.Exists(coverPath))
+                    {
+                        return _imageService.GetCoverImage(coverPath, fileName, _directoryService.CoverImageDirectory, encodeFormat, size);
+                    }
+                }
+            }
+
+            return "text.png";
+        }
+
         return format switch
         {
             MangaFormat.Epub => _bookService.GetCoverImage(filePath, fileName, _directoryService.CoverImageDirectory, encodeFormat, size),
             MangaFormat.Archive => _archiveService.GetCoverImage(filePath, fileName, _directoryService.CoverImageDirectory, encodeFormat, size),
             MangaFormat.Image => _imageService.GetCoverImage(filePath, fileName, _directoryService.CoverImageDirectory, encodeFormat, size),
             MangaFormat.Pdf => _bookService.GetCoverImage(filePath, fileName, _directoryService.CoverImageDirectory, encodeFormat, size),
-            MangaFormat.Text => "text.png",
             _ => string.Empty
         };
     }
