@@ -5,6 +5,7 @@ using System.Runtime.InteropServices;
 using System.Text;
 using Kavita.Common.Helpers;
 using Kavita.Database.Tests;
+using Kavita.Models.Parser;
 using Kavita.Services.Scanner;
 using Microsoft.Extensions.Logging;
 using NSubstitute;
@@ -1047,6 +1048,64 @@ public class DirectoryServiceTests: AbstractFsTest
         var allFiles = ds.ScanFiles("C:/Data/", Parser.SupportedExtensions);
 
         Assert.Equal(5, allFiles.Count);
+
+        return Task.CompletedTask;
+    }
+
+    [Fact]
+    public Task GdsScanFiles_ShouldUseManifestFiles_WhenKavitaYamlExists()
+    {
+        var fileSystem = new MockFileSystem();
+        fileSystem.AddDirectory("C:/Data/Series");
+        fileSystem.AddFile("C:/Data/Series/kavita.yaml", new MockFileData("""
+            files:
+              chapter01.txt:
+                page: 12
+              chapter02.txt:
+                page: 14
+              ignored.jpg:
+                page: 1
+            """));
+        fileSystem.AddFile("C:/Data/Series/chapter01.txt", new MockFileData(string.Empty));
+        fileSystem.AddFile("C:/Data/Series/chapter02.txt", new MockFileData(string.Empty));
+        fileSystem.AddFile("C:/Data/Series/unlisted.txt", new MockFileData(string.Empty));
+        fileSystem.AddFile("C:/Data/Series/ignored.jpg", new MockFileData(string.Empty));
+
+        var ds = new DirectoryService(Substitute.For<ILogger<DirectoryService>>(), fileSystem);
+
+        var scanResults = ds.GdsScanFiles("C:/Data/Series", Parser.TextFileExtension,
+            new Dictionary<string, IList<SeriesModified>>(), [], "C:/Data/", false);
+
+        var result = Assert.Single(scanResults);
+        Assert.Equal("C:/Data/Series", result.Folder);
+        Assert.Equal(2, result.Files.Count);
+        var normalizedFiles = result.Files.Select(Parser.NormalizePath).ToList();
+        Assert.Contains(normalizedFiles, f => f.EndsWith("C:/Data/Series/chapter01.txt"));
+        Assert.Contains(normalizedFiles, f => f.EndsWith("C:/Data/Series/chapter02.txt"));
+        Assert.DoesNotContain(normalizedFiles, f => f.EndsWith("C:/Data/Series/unlisted.txt"));
+        Assert.DoesNotContain(normalizedFiles, f => f.EndsWith("C:/Data/Series/ignored.jpg"));
+
+        return Task.CompletedTask;
+    }
+
+    [Fact]
+    public Task GdsScanFiles_ShouldFallbackToDirectoryScan_WhenKavitaYamlMissing()
+    {
+        var fileSystem = new MockFileSystem();
+        fileSystem.AddDirectory("C:/Data/Series");
+        fileSystem.AddFile("C:/Data/Series/chapter01.txt", new MockFileData(string.Empty));
+        fileSystem.AddFile("C:/Data/Series/chapter02.txt", new MockFileData(string.Empty));
+
+        var ds = new DirectoryService(Substitute.For<ILogger<DirectoryService>>(), fileSystem);
+
+        var scanResults = ds.GdsScanFiles("C:/Data/Series", Parser.TextFileExtension,
+            new Dictionary<string, IList<SeriesModified>>(), [], "C:/Data/", false);
+
+        var result = Assert.Single(scanResults);
+        Assert.Equal(2, result.Files.Count);
+        var normalizedFiles = result.Files.Select(Parser.NormalizePath).ToList();
+        Assert.Contains(normalizedFiles, f => f.EndsWith("C:/Data/Series/chapter01.txt"));
+        Assert.Contains(normalizedFiles, f => f.EndsWith("C:/Data/Series/chapter02.txt"));
 
         return Task.CompletedTask;
     }

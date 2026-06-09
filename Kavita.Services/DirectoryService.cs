@@ -13,6 +13,8 @@ using Kavita.Models.DTOs.System;
 using Kavita.Models.Parser;
 using Kavita.Services.Scanner;
 using Microsoft.Extensions.Logging;
+using YamlDotNet.Serialization;
+using YamlDotNet.Serialization.NamingConventions;
 
 namespace Kavita.Services;
 
@@ -758,6 +760,40 @@ public class DirectoryService : IDirectoryService
         var files = new List<string>();
         if (!Exists(folderPath)) return result;
 
+        var manifest = GetGdsManifest(folderPath);
+        if (manifest?.Files is {Count: > 0})
+        {
+            var normalizedPath = Parser.NormalizePath(folderPath);
+            if (!forceCheck && seriesPaths.TryGetValue(normalizedPath, out var seriesInDir)
+                            && seriesInDir.Count > 0
+                            && GetGdsManifestLastWriteTime(folderPath) < seriesInDir.Min(s => s.LastScanned))
+            {
+                result.Add(new ScanResult
+                {
+                    Files = ArraySegment<string>.Empty,
+                    Folder = normalizedPath,
+                    LibraryRoot = libraryRoot,
+                    HasChanged = false
+                });
+
+                return result;
+            }
+
+            files.AddRange(GetFilesFromGdsManifest(folderPath, fileTypes, manifest, matcher));
+            if (files.Count > 0)
+            {
+                result.Add(new ScanResult
+                {
+                    Files = files,
+                    Folder = normalizedPath,
+                    LibraryRoot = libraryRoot,
+                    HasChanged = true
+                });
+            }
+
+            return result;
+        }
+
         var directories = GetDirectories(folderPath, matcher);
         foreach (var directory in directories)
         {
@@ -803,6 +839,55 @@ public class DirectoryService : IDirectoryService
         }
 
         return result;
+    }
+
+    private GdsInfo? GetGdsManifest(string folderPath)
+    {
+        var manifestPath = FileSystem.Path.Join(folderPath, "kavita.yaml");
+        if (!FileSystem.File.Exists(manifestPath)) return null;
+
+        try
+        {
+            var contents = FileSystem.File.ReadAllText(manifestPath);
+            var deserializer = new DeserializerBuilder()
+                .WithNamingConvention(UnderscoredNamingConvention.Instance)
+                .IgnoreUnmatchedProperties()
+                .Build();
+
+            return deserializer.Deserialize<GdsInfo>(contents);
+        }
+        catch (Exception ex)
+        {
+            _logger.LogDebug(ex, "Unable to parse GDS manifest at {ManifestPath}", manifestPath);
+
+            return null;
+        }
+    }
+
+    private DateTime GetGdsManifestLastWriteTime(string folderPath)
+    {
+        var manifestPath = FileSystem.Path.Join(folderPath, "kavita.yaml");
+        return FileSystem.File.Exists(manifestPath)
+            ? FileSystem.File.GetLastWriteTime(manifestPath)
+            : DateTime.MaxValue;
+    }
+
+    private IList<string> GetFilesFromGdsManifest(string folderPath, string fileTypes, GdsInfo manifest, GlobMatcher? matcher)
+    {
+        var files = new List<string>();
+        var reSearchPattern = new Regex(fileTypes, RegexOptions.IgnoreCase | RegexOptions.Compiled, Parser.RegexTimeout);
+        foreach (var fileName in manifest.Files?.Keys ?? [])
+        {
+            if (string.IsNullOrWhiteSpace(fileName)) continue;
+            if (matcher != null && matcher.ExcludeMatches(FileSystem.Path.GetFileName(fileName))) continue;
+            if (!reSearchPattern.IsMatch(FileSystem.Path.GetExtension(fileName))) continue;
+
+            var filePath = FileSystem.Path.Join(folderPath, fileName);
+            if (!FileSystem.File.Exists(filePath)) continue;
+            files.Add(filePath);
+        }
+
+        return files;
     }
 
     /// <summary>
