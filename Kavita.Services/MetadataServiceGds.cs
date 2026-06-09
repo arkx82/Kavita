@@ -26,6 +26,7 @@ namespace Kavita.Services;
 
 public class MetadataServiceGds : IMetadataServiceGds
 {
+    private const string TextCoverFallback = "text.png";
     public const string Name = "MetadataServiceGDS";
 
     private readonly IUnitOfWork _unitOfWork;
@@ -64,7 +65,12 @@ public class MetadataServiceGds : IMetadataServiceGds
             return Task.FromResult(false);
         }
 
-        if (!_cacheHelper.ShouldUpdateCoverImage(_directoryService.FileSystem.Path.Join(_directoryService.CoverImageDirectory, chapter.CoverImage),
+        var gdsCover = GetGdsCover(gdsInfo, mangaFile.FilePath);
+        var shouldReplaceTextFallback = !chapter.CoverImageLocked
+                                        && gdsCover == "TEXT"
+                                        && IsTextCoverFallback(chapter.CoverImage);
+
+        if (!shouldReplaceTextFallback && !_cacheHelper.ShouldUpdateCoverImage(_directoryService.FileSystem.Path.Join(_directoryService.CoverImageDirectory, chapter.CoverImage),
                 mangaFile, chapter.Created, forceUpdate, chapter.CoverImageLocked))
         {
             if (NeedsColorSpace(chapter, forceColorScape))
@@ -80,37 +86,32 @@ public class MetadataServiceGds : IMetadataServiceGds
         _logger.LogDebug("[MetadataServiceGDS] Generating cover image for {File}", mangaFile.FilePath);
         var handledByGds = false;
         var useFirstCover = false;
-        if (gdsInfo != null)
+        if (!string.IsNullOrEmpty(gdsCover))
         {
-            var fileName = Path.GetFileName(mangaFile.FilePath);
-            var gdsFile = GdsUtil.GetGdsFile(gdsInfo, fileName);
-            if (gdsFile != null)
+            if (gdsCover == "FIRST")
             {
-                if (gdsFile.Cover == "FIRST")
+                useFirstCover = true;
+            }
+            else if (gdsCover == "TEXT")
+            {
+                var generated = _readingItemService.GetCoverImage(mangaFile.FilePath,
+                    ImageService.GetChapterFormat(chapter.Id, chapter.VolumeId), mangaFile.Format, encodeFormat, coverImageSize);
+                chapter.CoverImage = string.IsNullOrEmpty(generated) ? TextCoverFallback : generated;
+                handledByGds = true;
+                _imageService.UpdateColorScape(chapter);
+                _unitOfWork.ChapterRepository.Update(chapter);
+            }
+            else
+            {
+                var filepath = Path.Join(_directoryService.CoverImageDirectory,
+                    ImageService.GetChapterFormat(chapter.Id, chapter.VolumeId)) + ".png";
+                handledByGds = GdsUtil.SaveCover(filepath, gdsCover);
+                _logger.LogDebug("[MetadataServiceGDS] Saved GDS cover for {Key} ({Handled})", Path.GetFileName(mangaFile.FilePath), handledByGds);
+                if (handledByGds)
                 {
-                    useFirstCover = true;
-                }
-                else if (gdsFile.Cover == "TEXT")
-                {
-                    var generated = _readingItemService.GetCoverImage(mangaFile.FilePath,
-                        ImageService.GetChapterFormat(chapter.Id, chapter.VolumeId), mangaFile.Format, encodeFormat, coverImageSize);
-                    chapter.CoverImage = string.IsNullOrEmpty(generated) ? "text.png" : generated;
-                    handledByGds = true;
+                    chapter.CoverImage = ImageService.GetChapterFormat(chapter.Id, chapter.VolumeId) + ".png";
                     _imageService.UpdateColorScape(chapter);
                     _unitOfWork.ChapterRepository.Update(chapter);
-                }
-                else if (!string.IsNullOrEmpty(gdsFile.Cover))
-                {
-                    var filepath = Path.Join(_directoryService.CoverImageDirectory,
-                        ImageService.GetChapterFormat(chapter.Id, chapter.VolumeId)) + ".png";
-                    handledByGds = GdsUtil.SaveCover(filepath, gdsFile.Cover);
-                    _logger.LogDebug("[MetadataServiceGDS] Saved GDS cover for {Key} ({Handled})", fileName, handledByGds);
-                    if (handledByGds)
-                    {
-                        chapter.CoverImage = ImageService.GetChapterFormat(chapter.Id, chapter.VolumeId) + ".png";
-                        _imageService.UpdateColorScape(chapter);
-                        _unitOfWork.ChapterRepository.Update(chapter);
-                    }
                 }
             }
         }
@@ -316,14 +317,14 @@ public class MetadataServiceGds : IMetadataServiceGds
                 return;
             }
 
-            var coverImage = series.CoverImage;
+            var coverImage = IsTextCoverFallback(series.CoverImage) ? null : series.CoverImage;
             if (coverImage == null)
             {
                 foreach (var volume in series.Volumes)
                 {
                     foreach (var chapter in volume.Chapters)
                     {
-                        if (chapter.CoverImage != null)
+                        if (!IsTextCoverFallback(chapter.CoverImage))
                         {
                             coverImage = chapter.CoverImage;
                             break;
@@ -352,6 +353,22 @@ public class MetadataServiceGds : IMetadataServiceGds
         {
             _logger.LogError(ex, "[MetadataServiceGDS] There was an exception during cover generation for {SeriesName} ", series.Name);
         }
+    }
+
+    private static bool IsTextCoverFallback(string? coverImage)
+    {
+        return string.IsNullOrEmpty(coverImage) || coverImage.Equals(TextCoverFallback, StringComparison.OrdinalIgnoreCase);
+    }
+
+    private static string? GetGdsCover(GdsInfo? gdsInfo, string filePath)
+    {
+        if (gdsInfo == null)
+        {
+            return null;
+        }
+
+        var fileName = Path.GetFileName(filePath);
+        return GdsUtil.GetGdsFile(gdsInfo, fileName)?.Cover;
     }
 
     [DisableConcurrentExecution(timeoutInSeconds: 60 * 60 * 60)]
