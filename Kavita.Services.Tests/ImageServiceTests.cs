@@ -1,6 +1,9 @@
 ﻿using System.Text;
 using Kavita.Models.Entities.Enums;
+using Microsoft.Extensions.Logging;
 using NetVips;
+using NSubstitute;
+using System.IO.Abstractions;
 using Image = NetVips.Image;
 
 namespace Kavita.Services.Tests;
@@ -11,6 +14,36 @@ public class ImageServiceTests
     private readonly string _testDirectoryColorScapes = Path.Join(Directory.GetCurrentDirectory(), "../../../Test Data/ImageService/ColorScapes");
     private const string OutputPattern = "_output";
     private const string BaselinePattern = "_baseline";
+
+    [Theory]
+    [InlineData("[사마달] 흑천룡")]
+    [InlineData("[검궁인]江湖百八計")]
+    public void CreateTextCoverImage_ShouldGenerateCover_ForNonLatinTitles(string title)
+    {
+        var outputDirectory = Path.Join(Path.GetTempPath(), $"kavita-text-cover-{Guid.NewGuid():N}");
+        Directory.CreateDirectory(outputDirectory);
+
+        try
+        {
+            var directoryService = new DirectoryService(Substitute.For<ILogger<DirectoryService>>(), new FileSystem());
+            var imageService = new ImageService(Substitute.For<ILogger<ImageService>>(), directoryService);
+
+            var fileName = imageService.CreateTextCoverImage(title, "text-cover", outputDirectory, EncodeFormat.PNG);
+
+            Assert.Equal("text-cover.png", fileName);
+            var outputPath = Path.Join(outputDirectory, fileName);
+            Assert.True(File.Exists(outputPath));
+
+            using var image = Image.NewFromFile(outputPath);
+            var (width, height) = CoverImageSize.Default.GetDimensions();
+            Assert.Equal(width, image.Width);
+            Assert.Equal(height, image.Height);
+        }
+        finally
+        {
+            Directory.Delete(outputDirectory, true);
+        }
+    }
 
     /// <summary>
     /// Run this once to get the baseline generation

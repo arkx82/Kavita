@@ -800,7 +800,8 @@ public class ImageService(ILogger<ImageService> logger, IDirectoryService direct
             using var gChannel = Image.Black(width, height) + 40.0;
             using var bChannel = Image.Black(width, height) + 65.0;
             using var bg = rChannel.Bandjoin(gChannel).Bandjoin(bChannel).Cast(Enums.BandFormat.Uchar);
-            using var bgAlpha = bg.Bandjoin(255.0);
+            using var bgSrgb = bg.Copy(interpretation: Enums.Interpretation.Srgb);
+            using var bgAlpha = bgSrgb.Bandjoin(255.0);
 
             // Render white text on transparent background
             using var textImg = Image.Text(displayTitle, font: "sans bold 32",
