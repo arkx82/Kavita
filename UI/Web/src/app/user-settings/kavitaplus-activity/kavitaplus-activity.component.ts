@@ -3,24 +3,28 @@ import {takeUntilDestroyed} from '@angular/core/rxjs-interop';
 import {TranslocoDirective} from '@jsverse/transloco';
 import {NgbNav, NgbNavItem, NgbNavLink} from '@ng-bootstrap/ng-bootstrap';
 import {KavitaPlusAuditService} from '../../_services/kavitaplus-audit.service';
-import {ScrobbleProvider, ScrobblingService, UserScrobbleProvider} from '../../_services/scrobbling.service';
+import {ScrobbleProvider, ScrobblingService} from '../../_services/scrobbling.service';
 import {KavitaPlusAuditEntry} from '../../_models/kavitaplus/kavita-plus-audit-entry';
 import {KavitaPlusAuditCategory} from '../../_models/kavitaplus/kavita-plus-audit-category.enum';
 import {AuditStatus} from '../../_models/kavitaplus/audit-status.enum';
 import {KavitaplusTimelineComponent} from '../../_single-module/kavitaplus-timeline/kavitaplus-timeline.component';
+import {
+  KavitaPlusAuditEntryComponent
+} from '../../admin/kavita-plus/kavitaplus-audit-entry/kavita-plus-audit-entry.component';
 import {ScrobbleAccountCardComponent} from '../scrobble-account-card/scrobble-account-card.component';
 import {KavitaPlusEventType} from "../../_models/kavitaplus/kavita-plus-event-type.enum";
 import {Tabs} from "../../_models/tabs";
 import {TabTitlePipe} from "../../_pipes/tab-title.pipe";
 import {Pagination} from '../../_models/pagination';
 import {LicenseService} from '../../_services/license.service';
+import {UserScrobbleProvider} from "../../_models/kavitaplus/scrobble-providers/user-scrobble-provider";
 
 @Component({
   selector: 'app-kavitaplus-activity',
   templateUrl: './kavitaplus-activity.component.html',
   styleUrls: ['./kavitaplus-activity.component.scss'],
   changeDetection: ChangeDetectionStrategy.OnPush,
-  imports: [TranslocoDirective, NgbNav, NgbNavItem, NgbNavLink, KavitaplusTimelineComponent, ScrobbleAccountCardComponent, TabTitlePipe],
+  imports: [TranslocoDirective, NgbNav, NgbNavItem, NgbNavLink, KavitaplusTimelineComponent, KavitaPlusAuditEntryComponent, ScrobbleAccountCardComponent, TabTitlePipe],
 })
 export class KavitaplusActivityComponent implements OnInit {
   private readonly auditService = inject(KavitaPlusAuditService);
@@ -87,7 +91,7 @@ export class KavitaplusActivityComponent implements OnInit {
   }
 
   loadData(reset = true) {
-    if (!this.licenseService.hasValidLicense()) {
+    if (!this.licenseService.hasActiveLicense()) {
       this.isLoading.set(false);
       this.isLoadingMore.set(false);
       return;

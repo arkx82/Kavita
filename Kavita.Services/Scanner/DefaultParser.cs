@@ -161,6 +161,7 @@ public abstract class DefaultParser(IDirectoryService directoryService) : IDefau
         info.AniListId = ExternalIdParser.GetAniListId(weblinks);
         info.MalId = ExternalIdParser.GetMalId(weblinks);
         info.MangaBakaId = ExternalIdParser.GetMangaBakaId(weblinks);
+        info.HardcoverId = ExternalIdParser.GetHardcoverBookId(weblinks);
 
         var comicvineId = Parser.ParseComicVineIdFromComicInfoNote(notes);
         var parsedCvWeblink = ExternalIdParser.GetComicVineId(weblinks);

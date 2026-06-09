@@ -552,6 +552,27 @@ public class ImageService(ILogger<ImageService> logger, IDirectoryService direct
     }
 
     /// <inheritdoc />
+    public string CreateThumbnailFromFile(string sourceFile, string fileName, EncodeFormat encodeFormat, int thumbnailWidth = ThumbnailWidth, string? targetDirectory = null)
+    {
+        try
+        {
+            targetDirectory ??= directoryService.CoverImageDirectory;
+            using var thumbnail = Image.Thumbnail(sourceFile, thumbnailWidth);
+
+            fileName += encodeFormat.GetExtension();
+            thumbnail.WriteToFile(directoryService.FileSystem.Path.Join(targetDirectory, fileName));
+
+            return fileName;
+        }
+        catch (Exception e)
+        {
+            logger.LogError(e, "Error creating thumbnail from file {SourceFile}", sourceFile);
+        }
+
+        return string.Empty;
+    }
+
+    /// <inheritdoc />
     public async Task<string> CreateThumbnailFromUrl(string url, string fileName, EncodeFormat encodeFormat, int thumbnailWidth = ThumbnailWidth)
     {
         try
@@ -779,7 +800,7 @@ public class ImageService(ILogger<ImageService> logger, IDirectoryService direct
             using var gChannel = Image.Black(width, height) + 40.0;
             using var bChannel = Image.Black(width, height) + 65.0;
             using var bg = rChannel.Bandjoin(gChannel).Bandjoin(bChannel).Cast(Enums.BandFormat.Uchar);
-            using var bgAlpha = bg.Addalpha();
+            using var bgAlpha = bg.Bandjoin(255.0);
 
             // Render white text on transparent background
             using var textImg = Image.Text(displayTitle, font: "sans bold 32",

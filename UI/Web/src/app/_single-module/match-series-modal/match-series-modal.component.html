@@ -9,7 +9,7 @@
   <div class="modal-body scrollable-modal d-flex flex-column gap-0">
 
     <!-- Sub-header: explainer left + In Kavita chip right -->
-    <div class="match-subheader d-flex align-items-center gap-3 pt-1">
+    <div class="match-subheader d-flex align-items-center flex-wrap gap-3 pt-1">
       <div class="match-description flex-fill">
         <p class="mb-1">{{ t('description') }}</p>
         <p class="mb-0 text-muted small">{{ t('dont-match-hint') }}</p>
@@ -19,6 +19,14 @@
         <div class="d-flex flex-column gap-0">
           <div class="in-kavita-label text-uppercase">{{ t('in-kavita') }}</div>
           <div class="in-kavita-name fw-bold">{{ series().name }}</div>
+          <div class="in-kavita-meta text-muted small">
+            @if (kavitaVolumeCount() > 0) {
+              {{ t('volume-count', {num: kavitaVolumeCount()}) }}
+            }
+            @if (kavitaChapterCount() > 0) {
+              {{ t('chapter-count', {num: kavitaChapterCount()}) }}
+            }
+          </div>
         </div>
       </div>
     </div>
@@ -48,7 +56,7 @@
             </span>
           } @else {
             <i class="fa-solid fa-magnifying-glass" aria-hidden="true"></i>
-            {{ t('search') }}
+            <span class="phone-hidden">{{ t('search') }}</span>
           }
         </button>
       </div>
@@ -112,10 +120,10 @@
           </app-empty-state>
         }
         @case ('results') {
-          @for (item of matches(); track item.series.name + '_' + item.series.provider) {
+          @for (item of matches(); track matchKey(item)) {
             <app-match-series-result-item
               [item]="item"
-              [isSelected]="selectedItem()?.series?.name === item.series.name && selectedItem()?.series?.provider === item.series.provider"
+              [isSelected]="!!selectedItem() && matchKey(item) === matchKey(selectedItem()!)"
               [showSynonyms]="true"
               [query]="lastQuery()"
               (selected)="selectItem($event)" />
@@ -127,15 +135,33 @@
   </div>
 
   <div class="modal-footer">
-    <button type="button" class="btn btn-secondary" (click)="close()">{{ t('close') }}</button>
-    @if (isDontMatch()) {
-      <button type="button" class="btn btn-primary" [disabled]="!canSaveDontMatch()" (click)="saveDontMatch()">
-        {{ t('save') }}
-      </button>
-    } @else {
-      <button type="button" class="btn btn-primary" [disabled]="!selectedItem()" (click)="applyMatch()">
-        {{ t('apply-match') }}
-      </button>
-    }
+
+    <div class="d-flex w-100 align-items-center gap-2">
+      <a class="btn btn-link phone-hidden" rel="noreferrer noopener" target="_blank" href="https://mangabaka.org/">
+        MangaBaka
+        <i class="fa-solid fa-arrow-up-right-from-square" aria-hidden="true"></i>
+      </a>
+      <a class="btn btn-link phone-hidden" rel="noreferrer noopener" target="_blank" href="https://anilist.co/">
+        AniList
+        <i class="fa-solid fa-arrow-up-right-from-square" aria-hidden="true"></i>
+      </a>
+      <a class="btn btn-link phone-hidden" rel="noreferrer noopener" target="_blank" href="https://hardcover.app/">
+        Hardcover
+        <i class="fa-solid fa-arrow-up-right-from-square" aria-hidden="true"></i>
+      </a>
+
+      <div class="ms-auto d-flex gap-2">
+        <button type="button" class="btn btn-secondary" (click)="close()">{{ t('close') }}</button>
+        @if (isDontMatch()) {
+          <button type="button" class="btn btn-primary" [disabled]="!canSaveDontMatch()" (click)="saveDontMatch()">
+            {{ t('save') }}
+          </button>
+        } @else {
+          <button type="button" class="btn btn-primary" [disabled]="!selectedItem()" (click)="applyMatch()">
+            {{ t('apply-match') }}
+          </button>
+        }
+      </div>
+    </div>
   </div>
 </ng-container>

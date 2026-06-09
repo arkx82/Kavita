@@ -23,6 +23,7 @@ using Kavita.Models.DTOs.Person;
 using Kavita.Models.DTOs.SignalR;
 using Kavita.Models.Entities;
 using Kavita.Models.Entities.Enums;
+using Kavita.Models.Entities.Enums.Audit;
 using Kavita.Models.Entities.Metadata;
 using Kavita.Models.Entities.Person;
 using Kavita.Models.Metadata;
@@ -245,7 +246,7 @@ public class ProcessSeries(
 
         if (seriesAdded)
         {
-            await externalMetadataService.FetchSeriesMetadata(series.Id, series.Library.Type);
+            await externalMetadataService.FetchSeriesMetadata(series.Id, series.Library.Type, MetadataFetchTrigger.SeriesAdded);
         }
 
         await eventHub.SendMessageAsync(MessageFactory.ScanSeries,
@@ -388,6 +389,7 @@ public class ProcessSeries(
             series.MalId = ExternalIdParser.GetMalId(series.Metadata.WebLinks) ?? 0;
             series.ComicVineId = ExternalIdParser.GetComicVineId(series.Metadata.WebLinks).Item1;
             series.MangaBakaId = ExternalIdParser.GetMangaBakaId(series.Metadata.WebLinks);
+            series.HardcoverId = ExternalIdParser.GetHardcoverSeriesId(series.Metadata.WebLinks);
         }
 
         if (!string.IsNullOrEmpty(firstChapter?.SeriesGroup) && library.ManageCollections)

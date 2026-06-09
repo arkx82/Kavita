@@ -21,6 +21,8 @@ public static class ExternalIdParser
     private const string AniListStaffWebsite = "https://anilist.co/staff/";
     private const string AniListCharacterWebsite = "https://anilist.co/character/";
     private const string HardcoverStaffWebsite = "https://hardcover.app/authors/";
+    private const string HardcoverSeriesWebsite = "https://hardcover.app/series/id/";
+    private const string HardcoverBookWebsite = "https://hardcover.app/book/id/";
     private const string MangaBakaWebsite = "https://mangabaka.org/";
 
 
@@ -43,6 +45,8 @@ public static class ExternalIdParser
         {AniListStaffWebsite, 0},
         {AniListCharacterWebsite, 0},
         {ComicVineWeblinkWebsite, 1},
+        {HardcoverSeriesWebsite, 0},
+        {HardcoverBookWebsite, 0},
         {MangaBakaWebsite, 0},
     };
 
@@ -139,7 +143,15 @@ public static class ExternalIdParser
     }
 
     #endregion
+    public static int GetHardcoverSeriesId(string? weblinks)
+    {
+        return ExtractId<int?>(weblinks, HardcoverSeriesWebsite) ?? 0;
+    }
 
+    public static int GetHardcoverBookId(string? weblinks)
+    {
+        return ExtractId<int?>(weblinks, HardcoverBookWebsite) ?? 0;
+    }
 
     /// <summary>
     /// Extract an ID from a given weblink

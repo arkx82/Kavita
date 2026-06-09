@@ -1,4 +1,14 @@
-import {ChangeDetectionStrategy, Component, computed, effect, inject, input, OnInit, signal} from '@angular/core';
+import {
+  ChangeDetectionStrategy,
+  Component,
+  computed,
+  effect,
+  inject,
+  input,
+  OnInit,
+  signal,
+  Signal
+} from '@angular/core';
 import {Series} from "../../_models/series";
 import {SeriesService} from "../../_services/series.service";
 import {FormControl, FormGroup, ReactiveFormsModule} from "@angular/forms";
@@ -6,7 +16,7 @@ import {NgbActiveModal, NgbTooltip} from "@ng-bootstrap/ng-bootstrap";
 import {translate, TranslocoDirective} from "@jsverse/transloco";
 import {ExternalSeriesMatch} from "../../_models/series-detail/external-series-match";
 import {ToastrService} from "ngx-toastr";
-import {catchError, filter, of, startWith, tap} from "rxjs";
+import {catchError, filter, of, skip, startWith, tap} from "rxjs";
 import {takeUntilDestroyed, toSignal} from "@angular/core/rxjs-interop";
 import {EmptyStateComponent} from "../../shared/_components/empty-state/empty-state.component";
 import {
@@ -14,6 +24,7 @@ import {
 } from "../../shared/_components/match-series-result-item/match-series-result-item.component";
 import {ImageComponent} from "../../shared/image/image.component";
 import {ImageService} from "../../_services/image.service";
+import {SeriesDetail} from "../../_models/series-detail/series-detail";
 
 @Component({
   selector: 'app-match-series-modal',
@@ -49,22 +60,7 @@ export class MatchSeriesModalComponent implements OnInit {
     { initialValue: false }
   );
 
-  private readonly _queryDisableEffect = effect(() => {
-    if (this.isDontMatch()) {
-      this.formGroup.controls.query.disable();
-    } else {
-      this.formGroup.controls.query.enable();
-    }
-  });
-
-  private readonly _autoSearchOnEnable = this.formGroup.controls.dontMatch.valueChanges.pipe(
-    filter(v => v === false),
-    takeUntilDestroyed()
-  ).subscribe(() => this.search());
-
-  protected readonly canSaveDontMatch = computed(() =>
-    this.isDontMatch() === true && !this.series().dontMatch
-  );
+  protected readonly canSaveDontMatch!: Signal<boolean>;
 
   matches = signal<ExternalSeriesMatch[]>([]);
   isLoading = signal<boolean>(false);
@@ -79,10 +75,35 @@ export class MatchSeriesModalComponent implements OnInit {
     return this.matches().length > 0 ? 'results' : 'no-results';
   });
 
-  protected coverImageUrl = computed(() => this.imageService.getSeriesCoverImage(this.series().id));
+  protected coverImageUrl!: Signal<string>;
+  protected readonly kavitaVolumeCount!: Signal<number>;
+  protected readonly kavitaChapterCount!: Signal<number>;
+  protected readonly seriesDetail = signal<SeriesDetail | null>(null);
+
+  constructor() {
+    this.canSaveDontMatch = computed(() => this.isDontMatch() === true && !this.series().dontMatch);
+    this.coverImageUrl = computed(() => this.imageService.getSeriesCoverImage(this.series().id));
+    this.kavitaVolumeCount = computed(() => (this.seriesDetail()?.volumes ?? []).length);
+    this.kavitaChapterCount = computed(() => (this.seriesDetail()?.chapters ?? []).length);
+
+    effect(() => {
+      if (this.isDontMatch()) {
+        this.formGroup.controls.query.disable({ emitEvent: false });
+      } else {
+        this.formGroup.controls.query.enable({ emitEvent: false });
+      }
+    });
+
+    this.formGroup.controls.dontMatch.valueChanges.pipe(
+      skip(1),
+      filter(v => v === false),
+      takeUntilDestroyed()
+    ).subscribe(() => this.search());
+  }
 
   ngOnInit() {
     this.formGroup.patchValue({ dontMatch: this.series().dontMatch || false });
+    this.seriesService.getSeriesDetail(this.series().id).subscribe(detail => this.seriesDetail.set(detail));
     this.search();
   }
 
@@ -110,6 +131,10 @@ export class MatchSeriesModalComponent implements OnInit {
 
   clearQuery() {
     this.formGroup.get('query')?.setValue('');
+  }
+
+  matchKey(item: ExternalSeriesMatch) {
+    return `${item.series.provider}_${item.series.mangabakaId}_${item.series.hardcoverId}_${item.series.cbrId}_${item.series.aniListId}_${item.series.malId}`;
   }
 
   selectItem(item: ExternalSeriesMatch) {

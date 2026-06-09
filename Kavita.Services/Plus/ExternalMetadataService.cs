@@ -59,8 +59,7 @@ public class ExternalMetadataService : IExternalMetadataService
     private readonly IFileCacheService _fileCacheService;
     private readonly IKavitaPlusAuditService _auditService;
     private readonly TimeSpan _externalSeriesMetadataCache = TimeSpan.FromDays(30);
-    public static readonly HashSet<LibraryType> NonEligibleLibraryTypes =
-        [LibraryType.Comic, LibraryType.Book, LibraryType.Image];
+    private static readonly HashSet<LibraryType> NonEligibleLibraryTypes = [LibraryType.Comic, LibraryType.Image];
     private readonly SeriesDetailPlusDto _defaultReturn = new()
     {
         Series =  null,
@@ -125,7 +124,7 @@ public class ExternalMetadataService : IExternalMetadataService
         foreach (var seriesId in ids)
         {
             var libraryType = libTypes[seriesId];
-            var success = await FetchSeriesMetadata(seriesId, libraryType, ct);
+            var success = await FetchSeriesMetadata(seriesId, libraryType, MetadataFetchTrigger.ScheduledRefresh, ct);
             if (success)
             {
                 count++;
@@ -137,7 +136,8 @@ public class ExternalMetadataService : IExternalMetadataService
     }
 
 
-    public async Task<bool> FetchSeriesMetadata(int seriesId, LibraryType libraryType, CancellationToken ct = default)
+    public async Task<bool> FetchSeriesMetadata(int seriesId, LibraryType libraryType,
+        MetadataFetchTrigger trigger = MetadataFetchTrigger.SeriesAdded, CancellationToken ct = default)
     {
         if (!IsPlusEligible(libraryType)) return false;
         if (!await _licenseService.HasActiveLicense(ct: ct)) return false;
@@ -152,7 +152,7 @@ public class ExternalMetadataService : IExternalMetadataService
         }
 
         // Prefetch SeriesDetail data
-        return await GetSeriesDetailPlus(seriesId, libraryType, ct) != null;
+        return await GetSeriesDetailPlus(seriesId, libraryType, trigger, ct) != null;
     }
 
     public async Task<IList<MalStackDto>> GetStacksForUser(int userId, CancellationToken ct = default)
@@ -161,21 +161,26 @@ public class ExternalMetadataService : IExternalMetadataService
 
         // See if this user has Mal account on record
         var user = await _unitOfWork.UserRepository.GetUserByIdAsync(userId, ct: ct);
-        if (user == null || string.IsNullOrEmpty(user.MalUserName) || string.IsNullOrEmpty(user.MalAccessToken))
+        if (user == null) return ArraySegment<MalStackDto>.Empty;
+
+        var scrobbleSettings = user.ScrobbleProviders[ScrobbleProvider.Mal];
+
+        if (string.IsNullOrEmpty(scrobbleSettings.UserName) || string.IsNullOrEmpty(scrobbleSettings.AuthenticationToken))
         {
             _logger.LogInformation("User is attempting to fetch MAL Stacks, but missing information on their account");
             return ArraySegment<MalStackDto>.Empty;
         }
+
         try
         {
-            _logger.LogDebug("Fetching Kavita+ for MAL Stacks for user {UserName}", user.MalUserName);
+            _logger.LogDebug("Fetching Kavita+ for MAL Stacks for user {UserName}", scrobbleSettings.UserName);
 
             var license = (await _unitOfWork.SettingsRepository.GetSettingAsync(ServerSettingKey.LicenseKey, ct)).Value;
-            return await _kavitaPlusApiService.GetMalStacksAsync(user.MalUserName, license, ct);
+            return await _kavitaPlusApiService.GetMalStacksAsync(scrobbleSettings.UserName, license, ct);
         }
         catch (Exception ex)
         {
-            _logger.LogDebug(ex, "Fetching Kavita+ for MAL Stacks for user {UserName} failed", user.MalUserName);
+            _logger.LogDebug(ex, "Fetching Kavita+ for MAL Stacks for user {UserName} failed", scrobbleSettings.UserName);
             return ArraySegment<MalStackDto>.Empty;
         }
     }
@@ -274,7 +279,8 @@ public class ExternalMetadataService : IExternalMetadataService
 
     }
 
-    public async Task<SeriesDetailPlusDto?> GetSeriesDetailPlus(int seriesId, LibraryType libraryType, CancellationToken ct = default)
+    public async Task<SeriesDetailPlusDto?> GetSeriesDetailPlus(int seriesId, LibraryType libraryType,
+        MetadataFetchTrigger trigger = MetadataFetchTrigger.OnDemand, CancellationToken ct = default)
     {
         if (!IsPlusEligible(libraryType) || !await _licenseService.HasActiveLicense(ct: ct)) return _defaultReturn;
 
@@ -297,7 +303,7 @@ public class ExternalMetadataService : IExternalMetadataService
         // Get from Kavita+ API the Full Series metadata with rec/rev and cache to ExternalMetadata tables
         try
         {
-            return await FetchExternalMetadataForSeries(seriesId, libraryType, data, false, ct);
+            return await FetchExternalMetadataForSeries(seriesId, libraryType, data, false, trigger, ct);
         }
         catch (KavitaException ex)
         {
@@ -331,7 +337,7 @@ public class ExternalMetadataService : IExternalMetadataService
                     HardcoverId = ids.HardcoverId,
                     MediaFormat = series.Library.Type.ConvertToPlusMediaFormat(series.Format),
                     SeriesName = series.Name // Required field, not used since provider Ids are passed
-                }, true, ct);
+                }, true, MetadataFetchTrigger.ManualMatch, ct);
 
             if (metadata.Series == null)
             {
@@ -410,7 +416,7 @@ public class ExternalMetadataService : IExternalMetadataService
     /// <param name="ct"></param>
     /// <returns></returns>
     private async Task<SeriesDetailPlusDto> FetchExternalMetadataForSeries(int seriesId, LibraryType libraryType, PlusSeriesRequestDto data,
-        bool fromMatchFlow = false, CancellationToken ct = default)
+        bool fromMatchFlow = false, MetadataFetchTrigger trigger = MetadataFetchTrigger.OnDemand, CancellationToken ct = default)
     {
 
         var series = await _unitOfWork.SeriesRepository.GetSeriesByIdAsync(seriesId, SeriesIncludes.Library, ct);
@@ -439,6 +445,7 @@ public class ExternalMetadataService : IExternalMetadataService
                     CbrId = series.CbrId,
                     AniListId = series.AniListId,
                     HardcoverId = series.HardcoverId,
+                    Trigger = trigger,
                 },
                 ct: ct);
 
@@ -516,13 +523,14 @@ public class ExternalMetadataService : IExternalMetadataService
                 .Average(r => r.AverageScore) : 0;
 
             // prefer what was passed in (manual match), fall back to what K+ returned
-            var beforeIds = new AuditLogMatchExternalIdsParamsDto { AniListId = series.AniListId, MalId = series.MalId, MangaBakaId = series.MangaBakaId, CbrId = series.CbrId };
+            var beforeIds = new AuditLogMatchExternalIdsParamsDto { AniListId = series.AniListId, MalId = series.MalId, MangaBakaId = series.MangaBakaId, CbrId = series.CbrId, HardcoverId = series.HardcoverId };
 
             externalSeriesMetadata.MalId = data.MalId ?? result.MalId ?? 0;
             externalSeriesMetadata.AniListId = data.AniListId ?? result.AniListId ?? 0;
             externalSeriesMetadata.CbrId = data.CbrId ?? result.CbrId ?? 0;
             series.MangaBakaId = data.MangabakaId ?? result.MangabakaId ?? 0;
-            var afterIds = new AuditLogMatchExternalIdsParamsDto { AniListId = externalSeriesMetadata.AniListId, MalId = externalSeriesMetadata.MalId, MangaBakaId = series.MangaBakaId, CbrId = externalSeriesMetadata.CbrId };
+            var hardcoverId = data.HardcoverId ?? result.Series?.HardcoverId ?? series.HardcoverId;
+            var afterIds = new AuditLogMatchExternalIdsParamsDto { AniListId = externalSeriesMetadata.AniListId, MalId = externalSeriesMetadata.MalId, MangaBakaId = series.MangaBakaId, CbrId = externalSeriesMetadata.CbrId, HardcoverId = hardcoverId };
 
             await _auditService.LogMatchAsync(KavitaPlusEventType.SeriesMatched, seriesId,
                 new AuditLogMatchedParamsDto { SeriesName = series.Name, Before = beforeIds, After = afterIds, MatchedName = result.Series?.Name }, ct: ct);
@@ -1250,7 +1258,7 @@ public class ExternalMetadataService : IExternalMetadataService
     private static (bool, MetadataFieldChangeDto?) UpdateExternalIds(Series series, MetadataSettingsDto _, ExternalSeriesDetailDto externalMetadata)
     {
         var madeModification = false;
-        var from = new { aniListId = series.AniListId, malId = series.MalId, cbrId = series.CbrId, mangaBakaId = series.MangaBakaId };
+        var from = new { aniListId = series.AniListId, malId = series.MalId, cbrId = series.CbrId, mangaBakaId = series.MangaBakaId, hardcoverId = series.HardcoverId };
         if (externalMetadata.AniListId is > 0)
         {
             series.AniListId = externalMetadata.AniListId.Value;
@@ -1275,10 +1283,16 @@ public class ExternalMetadataService : IExternalMetadataService
             madeModification = true;
         }
 
-        // TODO: Add the rest of the Ids when Kavita+ has them
+        if (externalMetadata.HardcoverId is > 0)
+        {
+            series.HardcoverId = externalMetadata.HardcoverId.Value;
+            madeModification = true;
+        }
+
+        // TODO: Add the rest of the Ids (Metron/ComicVine) when Kavita+ has them
 
         if (!madeModification) return (false, null);
-        var to = new { aniListId = series.AniListId, malId = series.MalId, cbrId = series.CbrId, mangaBakaId = series.MangaBakaId };
+        var to = new { aniListId = series.AniListId, malId = series.MalId, cbrId = series.CbrId, mangaBakaId = series.MangaBakaId, hardcoverId = series.HardcoverId };
 
         return (true, new MetadataFieldChangeDto(MetadataFieldChangeKind.ExternalIds, from, to));
     }
