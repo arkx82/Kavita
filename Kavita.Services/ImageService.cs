@@ -806,7 +806,7 @@ public class ImageService(ILogger<ImageService> logger, IDirectoryService direct
             using var bgAlpha = bgSrgb.Bandjoin(255.0);
 
             // Render white text on transparent background
-            using var textImg = Image.Text(markupSafeTitle, font: "sans bold 32",
+            using var textImg = Image.Text(markupSafeTitle, font: "Noto Serif CJK KR bold 32",
                 width: width - 60, rgba: true, align: Enums.Align.Centre);
 
             var textX = (width - textImg.Width) / 2;
