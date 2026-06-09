@@ -92,7 +92,9 @@ public class MetadataServiceGds : IMetadataServiceGds
                 }
                 else if (gdsFile.Cover == "TEXT")
                 {
-                    chapter.CoverImage = "text.png";
+                    var generated = _readingItemService.GetCoverImage(mangaFile.FilePath,
+                        ImageService.GetChapterFormat(chapter.Id, chapter.VolumeId), mangaFile.Format, encodeFormat, coverImageSize);
+                    chapter.CoverImage = string.IsNullOrEmpty(generated) ? "text.png" : generated;
                     handledByGds = true;
                     _imageService.UpdateColorScape(chapter);
                     _unitOfWork.ChapterRepository.Update(chapter);
