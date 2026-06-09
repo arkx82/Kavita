@@ -69,4 +69,15 @@ public interface IImageService
     /// <param name="thumbnailWidth">Width of thumbnail</param>
     /// <returns>File name with extension of the saved file, or empty string on failure</returns>
     Task<string> CreateThumbnailFromUrl(string url, string fileName, EncodeFormat encodeFormat, int thumbnailWidth = 320);
+
+    /// <summary>
+    /// Generates a cover image with the given title rendered as text on a solid background.
+    /// </summary>
+    /// <param name="title">Title text to render</param>
+    /// <param name="fileName">Output filename without extension</param>
+    /// <param name="outputDirectory">Directory to write the image to</param>
+    /// <param name="encodeFormat">Image encoding format</param>
+    /// <param name="size">Cover image size</param>
+    /// <returns>Filename with extension, or empty string on failure</returns>
+    string CreateTextCoverImage(string title, string fileName, string outputDirectory, EncodeFormat encodeFormat, CoverImageSize size = CoverImageSize.Default);
 }

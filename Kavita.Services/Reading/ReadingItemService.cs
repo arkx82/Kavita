@@ -162,7 +162,10 @@ public class ReadingItemService : IReadingItemService
                 }
             }
 
-            return "text.png";
+            var title = Path.GetFileNameWithoutExtension(filePath);
+            var generated = _imageService.CreateTextCoverImage(title, fileName, _directoryService.CoverImageDirectory, encodeFormat, size);
+
+            return string.IsNullOrEmpty(generated) ? "text.png" : generated;
         }
 
         return format switch

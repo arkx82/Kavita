@@ -766,5 +766,47 @@ public class ImageService(ILogger<ImageService> logger, IDirectoryService direct
         return (r, g, b);
     }
 
+    public string CreateTextCoverImage(string title, string fileName, string outputDirectory, EncodeFormat encodeFormat, CoverImageSize size = CoverImageSize.Default)
+    {
+        var (width, height) = size.GetDimensions();
+
+        try
+        {
+            var displayTitle = title.Length > 80 ? title[..77] + "..." : title;
+
+            // Build solid dark-blue background (28, 40, 65)
+            using var rChannel = Image.Black(width, height) + 28.0;
+            using var gChannel = Image.Black(width, height) + 40.0;
+            using var bChannel = Image.Black(width, height) + 65.0;
+            using var bg = rChannel.Bandjoin(gChannel).Bandjoin(bChannel).Cast(Enums.BandFormat.Uchar);
+            using var bgAlpha = bg.Addalpha();
+
+            // Render white text on transparent background
+            using var textImg = Image.Text(displayTitle, font: "sans bold 32",
+                width: width - 60, rgba: true, align: Enums.Align.Centre);
+
+            var textX = (width - textImg.Width) / 2;
+            var textY = (height - textImg.Height) / 2;
+
+            // Embed text into full-canvas at correct position (transparent padding)
+            using var textPadded = textImg.Embed(textX, textY, width, height,
+                extend: Enums.Extend.Background, background: new double[] { 0, 0, 0, 0 });
+
+            using var composed = bgAlpha.Composite2(textPadded, Enums.BlendMode.Over);
+            using var final = composed.Flatten(background: new double[] { 28, 40, 65 });
+
+            var outputFileName = fileName + encodeFormat.GetExtension();
+            final.WriteToFile(directoryService.FileSystem.Path.Join(outputDirectory, outputFileName));
+
+            return outputFileName;
+        }
+        catch (Exception ex)
+        {
+            logger.LogWarning(ex, "[CreateTextCoverImage] Failed to generate text cover for '{Title}'", title);
+        }
+
+        return string.Empty;
+    }
+
 
 }
