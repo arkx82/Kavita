@@ -38,6 +38,7 @@ import {TranslocoDirective} from "@jsverse/transloco";
 import {FilterV2} from "../_models/metadata/v2/filter-v2";
 import {FilterComparison} from "../_models/metadata/v2/filter-comparison";
 import {SeriesFilterField} from "../_models/metadata/v2/series-filter-field";
+import {FilterStatement} from "../_models/metadata/v2/filter-statement";
 import {CardActionablesComponent} from "../_single-module/card-actionables/card-actionables.component";
 import {LoadingComponent} from "../shared/loading/loading.component";
 import {debounceTime, ReplaySubject, tap} from "rxjs";
@@ -74,6 +75,7 @@ export class LibraryDetailComponent implements OnInit {
   public readonly bulkSelectionService = inject(BulkSelectionService);
   public readonly metadataService = inject(MetadataService);
   private readonly jumpbarService = inject(JumpbarService);
+  private readonly libraryFilterStorageKeyPrefix = 'kavita--library-detail--filter--';
 
   // From Resolver
   readonly library = getWritableResolvedData(this.route, 'library');
@@ -84,7 +86,7 @@ export class LibraryDetailComponent implements OnInit {
   loadingSeries = false;
   pagination: Pagination = {currentPage: 0, totalPages: 0, totalItems: 0, itemsPerPage: 0};
   actions = computed(() => this.actionFactoryService.getLibraryActions());
-  filter: FilterV2<SeriesFilterField> | undefined = undefined;
+  filter: FilterV2<SeriesFilterField, SeriesSortField> | undefined = undefined;
   filterSettings: SeriesFilterSettings = new SeriesFilterSettings();
   filterOpen: EventEmitter<boolean> = new EventEmitter();
   filterActive: boolean = false;
@@ -114,18 +116,20 @@ export class LibraryDetailComponent implements OnInit {
     });
 
     this.route.data.pipe(takeUntilDestroyed(this.destroyRef)).subscribe(data => {
-      this.filter = data['filter'] as FilterV2<SeriesFilterField, SeriesSortField>;
+      this.filter = data['filter'] as FilterV2<SeriesFilterField, SeriesSortField> | undefined;
 
-      const defaultStmt = {field: SeriesFilterField.Libraries, value: this.libraryId() + '', comparison: FilterComparison.Equal};
+      if (this.filter == null) {
+        this.filter = this.loadSavedLibraryFilter();
+      }
 
       if (this.filter == null) {
         this.filter = this.metadataService.createDefaultFilterDto('series');
-        this.filter.statements.push(defaultStmt);
       }
 
+      this.ensureLibraryFilterStatement(this.filter);
 
-      this.filterActiveCheck = this.metadataService.createDefaultFilterDto('series');
-      this.filterActiveCheck!.statements.push(defaultStmt);
+
+      this.filterActiveCheck = this.createDefaultLibraryFilter();
       this.filterSettings.presetsV2 =  this.filter;
 
       this.loadPage$.pipe(takeUntilDestroyed(this.destroyRef), debounceTime(100), tap(_ => this.loadPage())).subscribe();
@@ -179,6 +183,8 @@ export class LibraryDetailComponent implements OnInit {
   updateFilter(data: FilterEvent<SeriesFilterField, SeriesSortField>) {
     if (data.filterV2 === undefined) return;
     this.filter = data.filterV2;
+    this.ensureLibraryFilterStatement(this.filter);
+    this.saveLibraryFilter(this.filter);
 
     if (data.isFirst) {
       this.loadPageSource.next(true);
@@ -206,6 +212,75 @@ export class LibraryDetailComponent implements OnInit {
   }
 
   trackByIdentity = (index: number, item: Series) => `${item.id}_${item.name}_${item.localizedName}_${item.pagesRead}`;
+
+  protected resetSavedLibraryFilter() {
+    localStorage.removeItem(this.getLibraryFilterStorageKey());
+    this.filter = this.createDefaultLibraryFilter();
+    this.filterSettings.presetsV2 = this.filter;
+    this.filterUtilityService.updateUrlFromFilter(this.filter).subscribe(() => {
+      this.loadPageSource.next(true);
+    });
+  }
+
+  private createDefaultLibraryFilter() {
+    const filter = this.metadataService.createDefaultFilterDto<SeriesFilterField, SeriesSortField>('series');
+    filter.statements.push(this.createLibraryFilterStatement());
+
+    return filter;
+  }
+
+  private createLibraryFilterStatement(): FilterStatement<SeriesFilterField> {
+    return {field: SeriesFilterField.Libraries, value: this.libraryId() + '', comparison: FilterComparison.Equal};
+  }
+
+  private ensureLibraryFilterStatement(filter: FilterV2<SeriesFilterField, SeriesSortField>) {
+    const libraryId = this.libraryId() + '';
+    const libraryStatement = filter.statements.find(stmt => stmt.field === SeriesFilterField.Libraries);
+
+    if (libraryStatement) {
+      libraryStatement.value = libraryId;
+      libraryStatement.comparison = FilterComparison.Equal;
+      return;
+    }
+
+    filter.statements.push(this.createLibraryFilterStatement());
+  }
+
+  private saveLibraryFilter(filter: FilterV2<SeriesFilterField, SeriesSortField>) {
+    localStorage.setItem(this.getLibraryFilterStorageKey(), JSON.stringify(filter));
+  }
+
+  private loadSavedLibraryFilter() {
+    const serializedFilter = localStorage.getItem(this.getLibraryFilterStorageKey());
+    if (!serializedFilter) return undefined;
+
+    try {
+      const filter = JSON.parse(serializedFilter) as unknown;
+      if (!this.isSavedLibraryFilter(filter)) {
+        localStorage.removeItem(this.getLibraryFilterStorageKey());
+        return undefined;
+      }
+
+      return filter;
+    } catch {
+      localStorage.removeItem(this.getLibraryFilterStorageKey());
+      return undefined;
+    }
+  }
+
+  private isSavedLibraryFilter(filter: unknown): filter is FilterV2<SeriesFilterField, SeriesSortField> {
+    if (filter === null || typeof filter !== 'object') return false;
+
+    const candidate = filter as Partial<FilterV2<SeriesFilterField, SeriesSortField>>;
+    return Array.isArray(candidate.statements)
+      && typeof candidate.combination === 'number'
+      && typeof candidate.entityType === 'number'
+      && typeof candidate.limitTo === 'number';
+  }
+
+  private getLibraryFilterStorageKey() {
+    return `${this.libraryFilterStorageKeyPrefix}${this.libraryId()}`;
+  }
 
   protected handleActionCallback(event: ActionResult<Library>) {
     switch (event.effect) {

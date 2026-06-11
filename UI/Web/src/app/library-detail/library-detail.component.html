@@ -22,6 +22,7 @@
         [jumpBarKeys]="jumpKeys()"
         [refresh]="refresh"
         (applyFilter)="updateFilter($event)"
+        (resetFilter)="resetSavedLibraryFilter()"
       >
 
         <ng-template #topBar>

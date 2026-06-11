@@ -105,6 +105,7 @@ export class CardDetailLayoutComponent<TFilter extends number, TSort extends num
 
   itemClicked = output<any>();
   applyFilter = output<FilterEvent>();
+  resetFilter = output<void>();
 
   itemTemplate = contentChild.required<TemplateRef<any>>('cardItem');
   noDataTemplate = contentChild<TemplateRef<any>>('noData');
@@ -206,6 +207,10 @@ export class CardDetailLayoutComponent<TFilter extends number, TSort extends num
   applyMetadataFilter(event: FilterEvent<number, number>) {
     this.applyFilter.emit(event as FilterEvent<TFilter, TSort>);
     this.filterSignal.set(event.filterV2);
+  }
+
+  resetMetadataFilter() {
+    this.resetFilter.emit();
   }
 
 

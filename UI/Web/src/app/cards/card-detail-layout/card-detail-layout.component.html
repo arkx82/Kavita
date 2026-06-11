@@ -23,7 +23,7 @@
   }
 
   @if (filterSettings(); as fs) {
-    <app-metadata-filter [filterSettings]="fs" [filterOpen]="filterOpen()!" (applyFilter)="applyMetadataFilter($event)">
+    <app-metadata-filter [filterSettings]="fs" [filterOpen]="filterOpen()!" (applyFilter)="applyMetadataFilter($event)" (resetFilter)="resetMetadataFilter()">
       <ng-template #extraButtons>
         <ng-container [ngTemplateOutlet]="extraButtonsRef()" />
       </ng-template>
