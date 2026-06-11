@@ -33,6 +33,7 @@ import {SortButtonComponent} from "../_single-module/sort-button/sort-button.com
 import {FilterSettingsBase} from "./filter-settings";
 import {FilterUtilitiesService} from "../shared/_services/filter-utilities.service";
 import {Breakpoint, BreakpointService} from "../_services/breakpoint.service";
+import {switchMap} from "rxjs";
 
 
 @Component({
@@ -233,7 +234,7 @@ export class MetadataFilterComponent<TFilter extends number = number, TSort exte
   save() {
     if (!this.filterV2) return;
     this.filterV2.name = this.sortGroup.get('name')?.value;
-    this.filterService.saveFilter(this.filterV2).subscribe(() => {
+    this.filterService.saveFilter(this.filterV2).pipe(switchMap(() => this.filterUtilitiesService.updateUrlFromFilter(this.filterV2))).subscribe(() => {
       this.toastr.success(translate('toasts.smart-filter-updated'));
       this.apply();
     });
