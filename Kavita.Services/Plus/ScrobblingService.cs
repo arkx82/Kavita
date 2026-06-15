@@ -13,6 +13,7 @@ using Kavita.API.Services.SignalR;
 using Kavita.Common;
 using Kavita.Common.Extensions;
 using Kavita.Common.Helpers;
+using Kavita.Models.Constants;
 using Kavita.Models.DTOs.Filtering.v2;
 using Kavita.Models.DTOs.Filtering.v2.Requests;
 using Kavita.Models.DTOs.KavitaPlus;
@@ -23,6 +24,8 @@ using Kavita.Models.DTOs.SignalR;
 using Kavita.Models.Entities;
 using Kavita.Models.Entities.Enums;
 using Kavita.Models.Entities.Enums.Audit;
+using Kavita.Models.Entities.Enums.KavitaPlus;
+using Kavita.Models.Entities.Enums.UserPreferences;
 using Kavita.Models.Entities.Metadata;
 using Kavita.Models.Entities.Scrobble;
 using Kavita.Models.Entities.User;
@@ -88,8 +91,7 @@ public class ScrobbleSyncContext
     public RateGate GetRateGate(ScrobbleEvent evt) => GetRateGate(evt.AppUserId, evt.ScrobbleProvider);
 
     /// <summary>
-    /// Minimum spacing between ANY two K+ requests, regardless of provider/scope. Stops a sync that
-    /// fans out across many providers/users (each with its own ready-to-fire gate) from bursting the K+ proxy.
+    /// Minimum spacing between ANY two K+ requests, regardless of provider/scope
     /// </summary>
     public static readonly TimeSpan GlobalRequestFloor = TimeSpan.FromMilliseconds(250);
 
@@ -150,13 +152,12 @@ public class ScrobbleSyncContext
     {
         private DateTime _nextAllowedUtc = DateTime.MinValue;
         private int _rateLeft;
-        private bool _seeded;
 
         /// <summary>
         /// True once the initial budget has been fetched from K+. Lets server-scoped gates shared
         /// between users avoid duplicate lookups.
         /// </summary>
-        public bool IsSeeded => _seeded;
+        public bool IsSeeded { get; private set; }
 
         /// <summary>
         /// Whether there is any budget left to attempt a request
@@ -178,7 +179,7 @@ public class ScrobbleSyncContext
         public void Seed(int rateLeft)
         {
             _rateLeft = rateLeft;
-            _seeded = true;
+            IsSeeded = true;
         }
 
         /// <summary>
@@ -211,8 +212,6 @@ public class ScrobblingService : IScrobblingService
     public const string MalWeblinkWebsite = ScrobblingHelper.MalWeblinkWebsite;
     public const string MalStaffWebsite = ScrobblingHelper.MalStaffWebsite;
     public const string MalCharacterWebsite = ScrobblingHelper.MalCharacterWebsite;
-    public const string GoogleBooksWeblinkWebsite = ScrobblingHelper.GoogleBooksWeblinkWebsite;
-    public const string MangaDexWeblinkWebsite = ScrobblingHelper.MangaDexWeblinkWebsite;
     public const string AniListStaffWebsite = ScrobblingHelper.AniListStaffWebsite;
     public const string AniListCharacterWebsite = ScrobblingHelper.AniListCharacterWebsite;
     public const string HardcoverStaffWebsite = ScrobblingHelper.HardcoverStaffWebsite;
@@ -288,7 +287,6 @@ public class ScrobblingService : IScrobblingService
     /// </summary>
     /// <param name="ct"></param>
     /// <remarks>This service can validate without license check as the task which calls will be guarded</remarks>
-    /// <returns></returns>
     public async Task CheckExternalAccessTokens(CancellationToken ct = default)
     {
         var users = await _unitOfWork.UserRepository.GetAllUsersAsync(ct: ct);
@@ -413,7 +411,8 @@ public class ScrobblingService : IScrobblingService
         };
     }
 
-    private List<ScrobbleProvider> GetProvidersForScrobbleEvent(List<ScrobbleProvider>? scrobbleProviders, ScrobbleEventType eventType, ScrobbleUpdateContext ctx)
+    private List<ScrobbleProvider> GetProvidersForScrobbleEvent(List<ScrobbleProvider>? scrobbleProviders,
+        ScrobbleEventType eventType, ScrobbleUpdateContext ctx)
     {
         return GetProvidersForScrobbleEvent(scrobbleProviders, eventType, ctx.User, ctx.Series);
     }
@@ -1122,12 +1121,12 @@ public class ScrobblingService : IScrobblingService
     private static List<ScrobbleEvent> CalculateNetWantToReadDecisions(List<ScrobbleEvent> addEvents, List<ScrobbleEvent> removeEvents)
     {
         // Create a dictionary to track the latest event for each user/series combination
-        var latestEvents = new Dictionary<(int SeriesId, int? ChapterID, int AppUserId), ScrobbleEvent>();
+        var latestEvents = new Dictionary<(int SeriesId, int? ChapterID, int AppUserId, ScrobbleProvider Provider), ScrobbleEvent>();
 
         // Process all add events
         foreach (var addEvent in addEvents)
         {
-            var key = (addEvent.SeriesId, addEvent.ChapterId, addEvent.AppUserId);
+            var key = (addEvent.SeriesId, addEvent.ChapterId, addEvent.AppUserId, addEvent.ScrobbleProvider);
 
             if (latestEvents.TryGetValue(key, out var value) && addEvent.CreatedUtc <= value.CreatedUtc) continue;
 
@@ -1138,7 +1137,7 @@ public class ScrobblingService : IScrobblingService
         // Process all remove events
         foreach (var removeEvent in removeEvents)
         {
-            var key = (removeEvent.SeriesId, removeEvent.ChapterId, removeEvent.AppUserId);
+            var key = (removeEvent.SeriesId, removeEvent.ChapterId, removeEvent.AppUserId, removeEvent.ScrobbleProvider);
 
             if (latestEvents.TryGetValue(key, out var value) && removeEvent.CreatedUtc <= value.CreatedUtc) continue;
 
@@ -1159,6 +1158,8 @@ public class ScrobblingService : IScrobblingService
                 Format = evt.Format,
                 AniListId = evt.AniListId,
                 MalId = (int?) evt.MalId,
+                MangabakaId = evt.MangabakaId,
+                HardcoverId = evt.HardcoverId,
                 ScrobbleEventType = evt.ScrobbleEventType,
                 ChapterNumber = evt.ChapterNumber,
                 VolumeNumber = (int?) evt.VolumeNumber,
@@ -1266,6 +1267,7 @@ public class ScrobblingService : IScrobblingService
             ChapterNumber = evt.ChapterNumber,
             VolumeNumber = (int?)evt.VolumeNumber,
             PercentRead = (int?)evt.Progress,
+            TotalReadCountForSeries = ((await _unitOfWork.SeriesRepository.GetSeriesDtoByIdAsync(evt.SeriesId, evt.AppUserId, ct: ct))!).TotalReads,
             SeriesName = evt.Series.Name,
             ScrobbleDateUtc = evt.LastModifiedUtc,
             Year = evt.Series.Metadata.ReleaseYear,
@@ -1561,7 +1563,11 @@ public class ScrobblingService : IScrobblingService
                         ChapterNumber = data.ChapterNumber,
                         VolumeNumber = data.VolumeNumber,
                         PercentRead = data.PercentRead,
+                        TotalReadCountForSeries = data.TotalReadCountForSeries,
                         Rating = data.Rating,
+                        ReviewBody = data.ReviewBody,
+                        ReadStatus = data.ReadStatus ?? ScrobbleReadStatus.Ignore,
+                        TransitionRuleKind = evt.TransitionRuleKind,
                         LibraryType = evt.Series?.Library?.Type ?? LibraryType.Manga
                     },
                     AuditStatus.Success, userId: evt.AppUserId);
@@ -1848,13 +1854,11 @@ public class ScrobblingService : IScrobblingService
 
     public async Task SyncProviderInfo(int userId, ScrobbleProvider provider, CancellationToken ct = default)
     {
-        _logger.LogDebug("Syncing info for {UserId} for {Provider}", userId, provider);
-
-        var license = (await _unitOfWork.SettingsRepository.GetSettingAsync(ServerSettingKey.LicenseKey, ct)).Value;
-
+        _logger.LogDebug("Syncing scrobbling info for {UserId} for {Provider}", userId, provider);
         var user = await _unitOfWork.UserRepository.GetUserByIdAsync(userId, ct: ct);
         if (user == null) return;
 
+        var license = (await _unitOfWork.SettingsRepository.GetSettingAsync(ServerSettingKey.LicenseKey, ct)).Value;
         var scrobbleProviderSettings = user.ScrobbleProviders[provider];
 
         scrobbleProviderSettings.LastSyncedUtc = DateTime.UtcNow;
@@ -1872,6 +1876,8 @@ public class ScrobblingService : IScrobblingService
 
             return;
         }
+
+        // TODO: Call HasTokenExpiredForProviderAsync() so we can validate the token authentication, rather than just assuming
 
         // MAL doesn't use JWT tokens
         if (provider != ScrobbleProvider.Mal)
@@ -1901,7 +1907,10 @@ public class ScrobblingService : IScrobblingService
             {
                 scrobbleProviderSettings.ValidUntilUtc = DateTime.MaxValue;
             }
-
+        }
+        else
+        {
+            scrobbleProviderSettings.ValidUntilUtc = DateTime.MaxValue;
         }
 
         _unitOfWork.UserRepository.Update(user);
@@ -1918,9 +1927,11 @@ public class ScrobblingService : IScrobblingService
         return libraries
             .Where(l => IsLibraryTypeSupported(provider, l.Type))
             .Select(l => l.Id)
+            .Where(libraryIds.Contains)
             .ToList();
 
     }
+
 
     public async Task<bool> RetryScrobbleAsync(int authUserId, KavitaPlusAuditEntryDto auditEntry, CancellationToken ct = default)
     {

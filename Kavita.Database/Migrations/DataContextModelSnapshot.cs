@@ -1078,6 +1078,9 @@ namespace Kavita.Database.Migrations
                     b.Property<long>("MangabakaId")
                         .HasColumnType("INTEGER");
 
+                    b.Property<int>("Provider")
+                        .HasColumnType("INTEGER");
+
                     b.Property<int>("SeriesId")
                         .HasColumnType("INTEGER");
 

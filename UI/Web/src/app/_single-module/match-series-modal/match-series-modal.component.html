@@ -8,28 +8,94 @@
 
   <div class="modal-body scrollable-modal d-flex flex-column gap-0">
 
+    @let match = matchInfo();
+
     <!-- Sub-header: explainer left + In Kavita chip right -->
     <div class="match-subheader d-flex align-items-center flex-wrap gap-3 pt-1">
       <div class="match-description flex-fill">
         <p class="mb-1">{{ t('description') }}</p>
         <p class="mb-0 text-muted small">{{ t('dont-match-hint') }}</p>
       </div>
-      <div class="in-kavita-chip d-flex align-items-center flex-shrink-0 gap-2">
-        <app-image [imageUrl]="coverImageUrl()" width="32px" height="46px" />
-        <div class="d-flex flex-column gap-0">
-          <div class="in-kavita-label text-uppercase">{{ t('in-kavita') }}</div>
-          <div class="in-kavita-name fw-bold">{{ series().name }}</div>
-          <div class="in-kavita-meta text-muted small">
-            @if (kavitaVolumeCount() > 0) {
-              {{ t('volume-count', {num: kavitaVolumeCount()}) }}
-            }
-            @if (kavitaChapterCount() > 0) {
-              {{ t('chapter-count', {num: kavitaChapterCount()}) }}
-            }
+      <div class="in-kavita-chip d-flex flex-column flex-shrink-0 gap-2">
+        <div class="d-flex align-items-center gap-2">
+          <app-image [imageUrl]="coverImageUrl()" width="32px" height="46px" />
+          <div class="d-flex flex-column gap-0">
+            <div class="in-kavita-label text-uppercase">{{ t('in-kavita') }}</div>
+            <div class="in-kavita-name fw-bold">{{ series().name }}</div>
+            <div class="in-kavita-meta text-muted small">
+              @if (kavitaVolumeCount() > 0) {
+                {{ t('volume-count', {num: kavitaVolumeCount()}) }}
+              }
+              @if (kavitaChapterCount() > 0) {
+                {{ t('chapter-count', {num: kavitaChapterCount()}) }}
+              }
+            </div>
           </div>
         </div>
+
+        @if (match && match.hasMatch) {
+          <div class="setting-section-break m-0"></div>
+          <div class="matched-to text-muted d-flex align-items-center gap-2">
+            <span>{{t('matched-to')}}</span>
+
+            @if (match.isLegacy) {
+              <app-scrobble-provider-tag-badge [provider]="ScrobbleProvider.AniList" [id]="match.aniListId" />
+            } @else {
+              @switch (match.matchedProvider) {
+                @case (MetadataProvider.Mangabaka) {
+                  <app-scrobble-provider-tag-badge [provider]="ScrobbleProvider.MangaBaka" [id]="match.mangaBakaId" />
+                }
+                @case (MetadataProvider.ComicBookRoundup) {
+                  <app-scrobble-provider-tag-badge [provider]="ScrobbleProvider.Cbr" [id]="match.cbrId" />
+                }
+                @case (MetadataProvider.Hardcover) {
+                  <app-scrobble-provider-tag-badge [provider]="ScrobbleProvider.Hardcover" [id]="match.hardcoverId" />
+                }
+              }
+            }
+          </div>
+        }
       </div>
     </div>
+
+    <!--Metadata Provider Explainer-->
+    @if (match) {
+      <div class="provider-card d-flex align-items-center gap-3 p-3 rounded-2 border">
+
+        <div class="provider-logo flex-shrink-0 rounded-2 d-flex align-items-center justify-content-center phone-hidden">
+          <i class="fas fa-database" aria-hidden="true"></i>
+        </div>
+
+        <div class="flex-grow-1 min-w-0">
+          <div class="d-flex align-items-center gap-2 flex-wrap">
+            <span class="fw-semibold small text-truncate">
+              {{t('searching-against', {provider: match.primaryProvider! | metadataProviderTitle })}}
+            </span>
+          </div>
+
+          <div class="small text-muted">
+            <app-transloco-inject key="match-series-modal.selected-desc">
+              <ng-template translocoSlot="libraryType">
+                {{t('library-type')}} <app-tag-badge size="sm">{{match.libraryType | libraryType}}</app-tag-badge>
+              </ng-template>
+              <ng-template translocoSlot="format">
+                @if (match.plusMediaFormat == PlusMediaFormat.Book || match.plusMediaFormat === PlusMediaFormat.LightNovel) {
+                  <span class="dot-separator mx-1"></span>
+                  {{t('format-type')}} <app-tag-badge size="sm">{{match.seriesFormat | mangaFormat}}</app-tag-badge>
+                }
+              </ng-template>
+            </app-transloco-inject>
+
+          </div>
+        </div>
+
+        <div class="flex-shrink-0 p-1 text-muted phone-hidden">
+          {{t('provider-help')}}
+        </div>
+      </div>
+    }
+
+
 
     <!-- Query bar -->
     <div class="py-3" [formGroup]="formGroup">

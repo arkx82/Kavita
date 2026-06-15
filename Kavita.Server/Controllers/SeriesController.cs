@@ -21,7 +21,9 @@ using Kavita.Models.DTOs.Recommendation;
 using Kavita.Models.DTOs.KavitaPlus.ExternalMetadata;
 using Kavita.Models.DTOs.SeriesDetail;
 using Kavita.Models.Entities.Enums;
+using Kavita.Models.Entities.Enums.KavitaPlus;
 using Kavita.Models.Entities.MetadataMatching;
+using Kavita.Models.Extensions;
 using Kavita.Server.Attributes;
 using Kavita.Server.Extensions;
 using Kavita.Server.Helpers;
@@ -30,6 +32,7 @@ using Microsoft.AspNetCore.Http.HttpResults;
 using Microsoft.AspNetCore.Mvc;
 using Microsoft.Extensions.Hosting;
 using Microsoft.Extensions.Logging;
+using MetadataProvider = Kavita.Models.Entities.Enums.MetadataProvider;
 
 namespace Kavita.Server.Controllers;
 
@@ -613,6 +616,66 @@ public class SeriesController(
         var ct = HttpContext.RequestAborted;
         await externalMetadataService.UpdateSeriesDontMatch(seriesId, dontMatch, ct);
         return Ok();
+    }
+
+    /// <summary>
+    /// Returns extra information around an existing match (and series) to display on the Match Screen.
+    /// </summary>
+    /// <param name="seriesId"></param>
+    /// <returns></returns>
+    [HttpGet("match-info")]
+    [KPlus]
+    [Authorize(Policy = PolicyGroups.AdminPolicy)]
+    public async Task<ActionResult<MatchSeriesInfoDto>> GetExistingMatchInfo(int seriesId)
+    {
+        var series = await unitOfWork.SeriesRepository.GetSeriesByIdAsync(seriesId, SeriesIncludes.ExternalMetadata | SeriesIncludes.Library);
+        if (series == null) return NotFound();
+
+        var plusFormat = series.Library.Type.ConvertToPlusMediaFormat(series.Format);
+        var libraryType = series.Library.Type;
+        var externalMetadata = series.ExternalSeriesMetadata;
+
+        // This is assuming v2 logic. Not sure if we will change how we match on V3 yet
+        var primaryProvider = Models.Entities.Enums.MetadataProvider.Mangabaka;
+        if (plusFormat is PlusMediaFormat.Comic)
+        {
+            primaryProvider = Models.Entities.Enums.MetadataProvider.ComicBookRoundup;
+        }
+        if (plusFormat is PlusMediaFormat.Book or PlusMediaFormat.LightNovel)
+        {
+            primaryProvider = Models.Entities.Enums.MetadataProvider.Hardcover;
+        }
+
+        // We need provider derived from the primary id
+        MetadataProvider? provider = null;
+
+        // Set AniList as MangaBaka since the next update will fix this
+        if (series.MangaBakaId > 0 || series.AniListId > 0)
+        {
+            provider = Models.Entities.Enums.MetadataProvider.Mangabaka;
+        } else if (series.HardcoverId > 0)
+        {
+            provider = Models.Entities.Enums.MetadataProvider.Hardcover;
+        } else if (series.CbrId > 0)
+        {
+            provider = Models.Entities.Enums.MetadataProvider.ComicBookRoundup;
+        }
+
+        return Ok(new MatchSeriesInfoDto
+        {
+            HasMatch = externalMetadata is {Id: > 0} && provider != null,
+            // MangaBaka will always set AniList if set
+            IsLegacy = series is {AniListId: > 0, MangaBakaId: 0},
+            CbrId = series.CbrId,
+            HardcoverId = series.HardcoverId,
+            MangaBakaId = (int) series.MangaBakaId,
+            AniListId = series.AniListId,
+            LibraryType = libraryType,
+            PlusMediaFormat = plusFormat,
+            MatchedProvider = provider,
+            PrimaryProvider = primaryProvider,
+            SeriesFormat = series.Format
+        });
     }
 
     /// <summary>

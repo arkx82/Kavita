@@ -1455,7 +1455,7 @@
         "kavitaplus-audit-alt": "Kavita+ Activity"
     },
 
-    "kavitaplus-audit": {
+    "kavitaplus-tooltip": {
         "panel-title": "Kavita+: Audit Log",
         "matched": "Matched",
         "unmatched": "Unmatched",
@@ -1478,7 +1478,9 @@
         "rating-updated": "Rating updated",
         "add-want-to-read": "Added to want to read",
         "remove-want-to-read": "Removed from want to read",
-        "review-submitted": "Review submitted"
+        "review-submitted": "Review submitted",
+        "metadata-source": "Metadata source",
+        "linked-to": "Linked to"
     },
 
     "kavitaplus-activity": {
@@ -1513,7 +1515,9 @@
         "filter-timeframe-24h": "Last 24 Hours",
         "filter-timeframe-7d": "Last 7 Days",
         "filter-timeframe-30d": "Last 30 Days",
-        "system": "System"
+        "system": "System",
+        "next-scrobble": "Next Scrobble: {{date}}",
+        "filter-provider-label": "Scrobble provider"
     },
 
     "kavitaplus-diff": {
@@ -1538,11 +1542,16 @@
         "today": "Today",
         "yesterday": "Yesterday",
         "events-count": "{{count}} events",
-        "retry": "Retry",
         "load-more-label": "Load more",
         "empty-title": "Nothing found",
         "empty-description": "Try a different filter or perform some matches/reading to populate",
         "system": "{{manage-kavitaplus-activity.system}}"
+    },
+
+    "kavita-plus-audit-entry": {
+        "system": "{{manage-kavitaplus-activity.system}}",
+        "retry": "Retry",
+        "match": "Match"
     },
 
     "audit-status-title-pipe": {
@@ -1601,7 +1610,8 @@
         "sync-started-collection": "Starting sync of {{collectionName}} ({{itemCount}} items)",
         "sync-failed-collection": "Sync failed for {{collectionName}}",
         "sync-completed-want-to-read": "{{seriesMatched}} series matched for {{userName}}",
-        "read-status-update": "Status {{status}}"
+        "read-status-update": "Status {{status}}",
+        "series-matched-against": "Matched against \"{{matchName}}\""
     },
 
     "kavita-plus-event-type-pipe": {
@@ -1674,7 +1684,13 @@
         "dont-match-active-description": "This series is opted out of Kavita+ matching and scrobbling.",
         "save": "{{common.save}}",
         "volume-count": "{{match-series-result-item.volume-count}}",
-        "chapter-count": "{{match-series-result-item.chapter-count}}"
+        "chapter-count": "{{match-series-result-item.chapter-count}}",
+        "matched-to": "Currently matched to",
+        "searching-against": "Searching against {{provider}}",
+        "selected-desc": "Selected because: {{libraryType}} {{format}}",
+        "library-type": "Library Type:",
+        "format-type": "Format:",
+        "provider-help": "One provider per library type"
     },
 
     "match-series-result-item": {
@@ -1687,6 +1703,12 @@
         "volume-count": "{{ num }} vol",
         "chapter-count": "{{ num }} ch",
         "issue-count": "{{ num }} issues"
+    },
+
+    "metadata-provider-title-pipe": {
+        "hardcover": "Hardcover",
+        "mangabaka": "MangaBaka",
+        "cbr": "Comic Book Roundup"
     },
 
     "scrobble-provider-tag-badge": {
@@ -3063,7 +3085,7 @@
     "import-mal-collection-modal": {
         "close": "{{common.close}}",
         "title": "MAL Interest Stack Import",
-        "description": "Import your MAL Interest Stacks and create Collections within Kavita",
+        "description": "Import your MAL Interest Stacks and create Collections within Kavita that sync",
         "series-count": "{{common.series-count}}",
         "restack-count": "{{num}} Restacks",
         "no-data": "{{common.no-data}}",
@@ -4193,7 +4215,7 @@
         "smart-filter-deleted": "Smart Filter Deleted",
         "smart-filter-updated": "Created/Updated smart filter",
         "external-source-already-exists": "An External Source already exists with the same Name/Host/API Key",
-        "tokens-expired": "One or more tokens have expired. Scrobbling will no longer process for these providers until you re-generate it in KavitaPlus > Connections",
+        "tokens-expired": "One or more Connection tokens have expired. Scrobbling/Syncing are paused until you re-generate it in Kavita+ > Connections",
         "collection-tag-deleted": "Collection Tag deleted",
         "force-kavita+-refresh-success": "Kavita+ external metadata has been invalidated",
         "collection-not-owned": "You do not own this collection",

@@ -93,7 +93,8 @@ public interface IExternalMetadataService
     /// <param name="seriesId"></param>
     /// <param name="ct"></param>
     /// <returns></returns>
-    Task<bool> WriteExternalMetadataToSeries(ExternalSeriesDetailDto externalMetadata, int seriesId, CancellationToken ct = default);
+    Task<bool> WriteExternalMetadataToSeries(ExternalSeriesDetailDto externalMetadata, int seriesId,
+        MetadataFetchTrigger trigger = MetadataFetchTrigger.OnDemand, CancellationToken ct = default);
 
     /// <summary>
     /// Get cover images for a Series/Volume/Chapter
@@ -103,5 +104,6 @@ public interface IExternalMetadataService
     /// <param name="chapterId">If set, will filter to chapters (overrides volume)</param>
     /// <param name="ct"></param>
     /// <returns></returns>
-    Task<IList<ExternalCoverResponseDto>> GetExternalCovers(int seriesId, int? volumeId = null, int? chapterId = null, CancellationToken ct = default);
+    Task<IList<ExternalCoverResponseDto>> GetExternalCovers(int seriesId, int? volumeId = null,
+        int? chapterId = null, CancellationToken ct = default);
 }

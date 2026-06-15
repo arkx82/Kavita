@@ -25,6 +25,19 @@ import {
 import {ImageComponent} from "../../shared/image/image.component";
 import {ImageService} from "../../_services/image.service";
 import {SeriesDetail} from "../../_models/series-detail/series-detail";
+import {
+  ScrobbleProviderTagBadgeComponent
+} from "../../shared/_components/scrobble-provider-tag-badge/scrobble-provider-tag-badge.component";
+import {MatchSeriesInfo} from "../../_models/kavitaplus/match-series-info";
+import {MetadataProvider} from "../../_models/kavitaplus/metadata-provider.enum";
+import {ScrobbleProvider} from "../../_services/scrobbling.service";
+import {MetadataProviderTitlePipe} from "../../_pipes/metadata-provider-title.pipe";
+import {LibraryTypePipe} from "../../_pipes/library-type.pipe";
+import {MangaFormatPipe} from "../../_pipes/manga-format.pipe";
+import {PlusMediaFormat} from "../../_models/series-detail/external-series-detail";
+import {TranslocoInjectComponent} from "../../shared/_components/transloco-inject/transloco-inject.component";
+import {TranslocoSlotDirective} from "../../_directives/transloco-slot.directive";
+import {TagBadgeComponent} from "../../shared/tag-badge/tag-badge.component";
 
 @Component({
   selector: 'app-match-series-modal',
@@ -35,6 +48,15 @@ import {SeriesDetail} from "../../_models/series-detail/series-detail";
     EmptyStateComponent,
     MatchSeriesResultItemComponent,
     ImageComponent,
+    ScrobbleProviderTagBadgeComponent,
+    MetadataProviderTitlePipe,
+    LibraryTypePipe,
+    MangaFormatPipe,
+    TranslocoInjectComponent,
+    TranslocoSlotDirective,
+    TagBadgeComponent,
+
+
   ],
   templateUrl: './match-series-modal.component.html',
   styleUrl: './match-series-modal.component.scss',
@@ -60,8 +82,7 @@ export class MatchSeriesModalComponent implements OnInit {
     { initialValue: false }
   );
 
-  protected readonly canSaveDontMatch!: Signal<boolean>;
-
+  canSaveDontMatch!: Signal<boolean>;
   matches = signal<ExternalSeriesMatch[]>([]);
   isLoading = signal<boolean>(false);
   hasSearched = signal<boolean>(false);
@@ -75,16 +96,23 @@ export class MatchSeriesModalComponent implements OnInit {
     return this.matches().length > 0 ? 'results' : 'no-results';
   });
 
-  protected coverImageUrl!: Signal<string>;
-  protected readonly kavitaVolumeCount!: Signal<number>;
-  protected readonly kavitaChapterCount!: Signal<number>;
-  protected readonly seriesDetail = signal<SeriesDetail | null>(null);
+  coverImageUrl!: Signal<string>;
+  kavitaVolumeCount!: Signal<number>;
+  kavitaChapterCount!: Signal<number>;
+  seriesDetail = signal<SeriesDetail | null>(null);
+  matchInfo = signal<MatchSeriesInfo | null>(null);
 
   constructor() {
     this.canSaveDontMatch = computed(() => this.isDontMatch() === true && !this.series().dontMatch);
     this.coverImageUrl = computed(() => this.imageService.getSeriesCoverImage(this.series().id));
     this.kavitaVolumeCount = computed(() => (this.seriesDetail()?.volumes ?? []).length);
     this.kavitaChapterCount = computed(() => (this.seriesDetail()?.chapters ?? []).length);
+
+    effect(() => {
+      this.seriesService.getMatchInfo(this.series().id).subscribe(res => {
+        this.matchInfo.set(res);
+      });
+    });
 
     effect(() => {
       if (this.isDontMatch()) {
@@ -164,4 +192,10 @@ export class MatchSeriesModalComponent implements OnInit {
       this.modalService.close(true);
     });
   }
+
+
+
+  protected readonly MetadataProvider = MetadataProvider;
+  protected readonly ScrobbleProvider = ScrobbleProvider;
+  protected readonly PlusMediaFormat = PlusMediaFormat;
 }

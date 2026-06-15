@@ -2,12 +2,12 @@
   "openapi": "3.0.4",
   "info": {
     "title": "Kavita",
-    "description": "Kavita provides a set of APIs authenticated via an Auth Key passed in the `x-api-key` header. Generate an Auth Key under User Settings → Manage Auth Keys, paste it into the Authorize panel, and all Try It requests will include it. Assume all fields of a payload are required unless marked optional. Built against v0.9.0.6",
+    "description": "Kavita provides a set of APIs authenticated via an Auth Key passed in the `x-api-key` header. Generate an Auth Key under User Settings → Manage Auth Keys, paste it into the Authorize panel, and all Try It requests will include it. Assume all fields of a payload are required unless marked optional. Built against v0.9.0.7",
     "license": {
       "name": "GPL-3.0",
       "url": "https://github.com/Kareadita/Kavita/blob/develop/LICENSE"
     },
-    "version": "0.9.0.6"
+    "version": "0.9.0.7"
   },
   "servers": [
     {
@@ -14184,6 +14184,42 @@
         }
       }
     },
+    "/api/Scrobbling/next-scrobble-time": {
+      "get": {
+        "tags": [
+          "Scrobbling"
+        ],
+        "summary": "Returns when Scrobbling upload will next execute",
+        "responses": {
+          "200": {
+            "description": "OK",
+            "content": {
+              "text/plain": {
+                "schema": {
+                  "type": "string",
+                  "format": "date-time",
+                  "nullable": true
+                }
+              },
+              "application/json": {
+                "schema": {
+                  "type": "string",
+                  "format": "date-time",
+                  "nullable": true
+                }
+              },
+              "text/json": {
+                "schema": {
+                  "type": "string",
+                  "format": "date-time",
+                  "nullable": true
+                }
+              }
+            }
+          }
+        }
+      }
+    },
     "/api/Search/series-for-mangafile": {
       "get": {
         "tags": [
@@ -15860,6 +15896,47 @@
         "responses": {
           "200": {
             "description": "OK"
+          }
+        }
+      }
+    },
+    "/api/Series/match-info": {
+      "get": {
+        "tags": [
+          "Series"
+        ],
+        "summary": "Returns extra information around an existing match (and series) to display on the Match Screen.",
+        "parameters": [
+          {
+            "name": "seriesId",
+            "in": "query",
+            "description": "",
+            "schema": {
+              "type": "integer",
+              "format": "int32"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "OK",
+            "content": {
+              "text/plain": {
+                "schema": {
+                  "$ref": "#/components/schemas/MatchSeriesInfoDto"
+                }
+              },
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/MatchSeriesInfoDto"
+                }
+              },
+              "text/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/MatchSeriesInfoDto"
+                }
+              }
+            }
           }
         }
       }
@@ -25203,6 +25280,9 @@
           "subjectType": {
             "$ref": "#/components/schemas/AuditSubjectType"
           },
+          "provider": {
+            "$ref": "#/components/schemas/ScrobbleProvider"
+          },
           "userId": {
             "type": "integer",
             "format": "int32",
@@ -25331,6 +25411,9 @@
             "format": "int32",
             "nullable": true
           },
+          "metadataProvider": {
+            "$ref": "#/components/schemas/MetadataProvider"
+          },
           "nextRefreshUtc": {
             "type": "string",
             "format": "date-time",
@@ -25408,6 +25491,10 @@
           "missingCount": {
             "type": "integer",
             "format": "int32",
+            "nullable": true
+          },
+          "collectionUrl": {
+            "type": "string",
             "nullable": true
           },
           "seriesName": {
@@ -26346,6 +26433,53 @@
         },
         "additionalProperties": false
       },
+      "MatchSeriesInfoDto": {
+        "type": "object",
+        "properties": {
+          "hasMatch": {
+            "type": "boolean"
+          },
+          "isLegacy": {
+            "type": "boolean"
+          },
+          "plusMediaFormat": {
+            "$ref": "#/components/schemas/PlusMediaFormat"
+          },
+          "libraryType": {
+            "$ref": "#/components/schemas/LibraryType"
+          },
+          "matchedProvider": {
+            "$ref": "#/components/schemas/MetadataProvider"
+          },
+          "primaryProvider": {
+            "$ref": "#/components/schemas/MetadataProvider"
+          },
+          "seriesFormat": {
+            "$ref": "#/components/schemas/MangaFormat"
+          },
+          "mangaBakaId": {
+            "type": "integer",
+            "format": "int32",
+            "nullable": true
+          },
+          "aniListId": {
+            "type": "integer",
+            "format": "int32",
+            "nullable": true
+          },
+          "hardcoverId": {
+            "type": "integer",
+            "format": "int32",
+            "nullable": true
+          },
+          "cbrId": {
+            "type": "integer",
+            "format": "int32",
+            "nullable": true
+          }
+        },
+        "additionalProperties": false
+      },
       "MatchStateOption": {
         "enum": [
           0,
@@ -26621,6 +26755,26 @@
         "x-enum-descriptions": [
           "Genre",
           "Tag"
+        ]
+      },
+      "MetadataProvider": {
+        "enum": [
+          2,
+          3,
+          4
+        ],
+        "type": "integer",
+        "description": "Members:\n- `2` — Hardcover\n- `3` — Mangabaka\n- `4` — ComicBookRoundup",
+        "format": "int32",
+        "x-enum-varnames": [
+          "Hardcover",
+          "Mangabaka",
+          "ComicBookRoundup"
+        ],
+        "x-enum-descriptions": [
+          "Hardcover",
+          "Mangabaka",
+          "ComicBookRoundup"
         ]
       },
       "MetadataSettingField": {

@@ -5,6 +5,7 @@ using System.Linq;
 using System.Threading;
 using System.Threading.Tasks;
 using Hangfire;
+using Hangfire.Storage;
 using Kavita.API.Database;
 using Kavita.API.Repositories;
 using Kavita.API.Services;
@@ -791,5 +792,19 @@ public class TaskScheduler : ITaskScheduler
 
         var runningJobs = JobStorage.Current.GetMonitoringApi().ProcessingJobs(0, int.MaxValue);
         return runningJobs.Exists(j => classNames.Contains(j.Value.Job.Method.DeclaringType?.Name));
+    }
+
+    /// <summary>
+    /// Returns Utc DateTime of next run of a given Job Id
+    /// </summary>
+    /// <param name="jobId"></param>
+    /// <returns></returns>
+    public static DateTime? GetNextRun(string jobId)
+    {
+        using var connection = JobStorage.Current.GetConnection();
+        var job = connection.GetRecurringJobs()
+            .FirstOrDefault(j => j.Id == jobId);
+
+        return job?.NextExecution;
     }
 }

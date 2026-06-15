@@ -14,6 +14,7 @@ using Kavita.Models.DTOs.KavitaPlus.Scrobble;
 using Kavita.Models.DTOs.Scrobbling;
 using Kavita.Models.Entities;
 using Kavita.Models.Entities.Enums;
+using Kavita.Models.Entities.Enums.KavitaPlus;
 using Kavita.Models.Entities.Enums.UserPreferences;
 using Kavita.Models.Entities.Scrobble;
 using Kavita.Models.Entities.User;
@@ -222,8 +223,8 @@ public class ScrobblingServiceTests(ITestOutputHelper outputHelper): AbstractDbT
                 AuthenticationToken = null,
                 Provider = ScrobbleProvider.AniList,
                 SeriesName = null,
-                Format = (PlusMediaFormat)0,
-            }, "", evt);
+                Format = PlusMediaFormat.Manga,
+            }, string.Empty, evt);
         });
         Assert.True(evt.IsErrored);
         Assert.Equal("Kavita+ subscription no longer active", evt.ErrorDetails);
@@ -248,7 +249,7 @@ public class ScrobblingServiceTests(ITestOutputHelper outputHelper): AbstractDbT
             AuthenticationToken = null,
             Provider = ScrobbleProvider.AniList,
             SeriesName = null,
-            Format = (PlusMediaFormat)0,
+            Format = PlusMediaFormat.Manga,
         }, string.Empty, evt));
         await unitOfWork.CommitAsync();
         Assert.True(evt.IsErrored);
@@ -284,8 +285,8 @@ public class ScrobblingServiceTests(ITestOutputHelper outputHelper): AbstractDbT
                 AuthenticationToken = null,
                 Provider = ScrobbleProvider.AniList,
                 SeriesName = null,
-                Format = (PlusMediaFormat)0,
-            }, "", evt);
+                Format = PlusMediaFormat.Manga,
+            }, string.Empty, evt);
         });
 
         Assert.True(evt.IsErrored);
