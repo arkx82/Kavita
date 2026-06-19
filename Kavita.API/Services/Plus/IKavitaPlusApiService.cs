@@ -25,13 +25,9 @@ public interface IKavitaPlusApiService
 {
     [Obsolete]
     Task<int> GetRateLimitAsync(string license, string token, CancellationToken ct = default);
-    [Obsolete]
     Task<IList<MalStackDto>> GetMalStacksAsync(string malUsername, string license, CancellationToken ct = default);
-    [Obsolete]
     Task<IList<ExternalSeriesMatchDto>> MatchSeriesAsync(MatchSeriesRequestDto request, CancellationToken ct = default);
-    [Obsolete]
     Task<SeriesDetailPlusApiDto> GetSeriesDetailAsync(PlusSeriesRequestDto request, CancellationToken ct = default);
-    [Obsolete]
     Task<ExternalSeriesDetailDto> GetSeriesDetailByIdAsync(ExternalMetadataIdsDto request, CancellationToken ct = default);
 
     Task<KPlusResult<SeriesDetailPlusApiDto?>> GetSeriesDetailV3Async(SeriesDetailRequestV3Dto request, CancellationToken ct = default);
@@ -45,4 +41,8 @@ public interface IKavitaPlusApiService
     Task<LicenseInfoDto?> GetLicenseInfo(CancellationToken ct = default);
     Task<IList<KavitaPlusProviderHealthSnapshotDto>> GetProviderHealthSnapshot(CancellationToken ct = default);
     Task<KavitaPlusLicenseUsageDto> GetLicenseUsage(CancellationToken ct = default);
+    Task<bool> CancelLicenseAsync(CancelKavitaPlusLicenseDto dto, CancellationToken ct);
+    Task<IList<KavitaPlusProductInfoDto>> GetProducts(CancellationToken ct = default);
+    Task<string?> RenewLicenseAsync(RenewKavitaPlusLicenseDto dto, CancellationToken ct);
+    Task<bool> ChangeEmail(ChangeEmailOnLicenseDto dto, CancellationToken ct);
 }
