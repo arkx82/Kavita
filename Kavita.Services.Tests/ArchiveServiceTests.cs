@@ -323,6 +323,33 @@ public class ArchiveServiceTests
         new DirectoryInfo(outputPath).Delete();
     }
 
+    [Fact]
+    public void CanParseCoverImage_NestedZip()
+    {
+        var imageService = Substitute.For<IImageService>();
+        imageService.WriteCoverThumbnail(Arg.Any<Stream>(), Arg.Any<string>(), Arg.Any<string>(), Arg.Any<EncodeFormat>(), Arg.Any<CoverImageSize>())
+            .Returns(x => "cover.jpg");
+        var archiveService = new ArchiveService(_logger, _directoryService, imageService, Substitute.For<IMediaErrorService>());
+        var testDirectory = Path.Join(Directory.GetCurrentDirectory(), "../../../Test Data/ArchiveService/Archives");
+        var archivePath = Path.Join(testDirectory, "nested zip cover.cbz");
+        var outputPath = Path.Join(testDirectory, "nested zip cover_output");
+        Directory.CreateDirectory(outputPath);
+        CreateNestedZipArchive(archivePath);
+
+        try
+        {
+            var expectedImage = archiveService.GetCoverImage(archivePath, "nested zip cover", outputPath, EncodeFormat.PNG);
+
+            Assert.Equal("cover.jpg", expectedImage);
+            imageService.Received(1).WriteCoverThumbnail(Arg.Any<Stream>(), "nested zip cover", outputPath, EncodeFormat.PNG, CoverImageSize.Default);
+        }
+        finally
+        {
+            File.Delete(archivePath);
+            new DirectoryInfo(outputPath).Delete(true);
+        }
+    }
+
     #region ShouldHaveComicInfo
 
     [Fact]

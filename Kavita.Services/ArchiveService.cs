@@ -202,6 +202,11 @@ public class ArchiveService(
                     using var archive = ZipFile.OpenRead(archivePath);
 
                     var entryName = FindCoverImageFilename(archivePath, archive.Entries.Select(e => e.FullName));
+                    if (entryName == null)
+                    {
+                        return GetNestedZipCoverImage(archive.Entries, archivePath, fileName, outputDirectory, format, size);
+                    }
+
                     var entry = archive.Entries.Single(e => e.FullName == entryName);
 
                     using var stream = entry.Open();
@@ -448,6 +453,33 @@ public class ArchiveService(
         }
 
         return imageCount;
+    }
+
+    private string GetNestedZipCoverImage(IEnumerable<ZipArchiveEntry> entries, string archivePath, string fileName,
+        string outputDirectory, EncodeFormat format, CoverImageSize size)
+    {
+        var nestedArchiveCount = 0;
+
+        foreach (var entry in entries.Where(IsSupportedNestedZipEntry))
+        {
+            nestedArchiveCount++;
+            if (nestedArchiveCount > MaxNestedArchivesPerArchive) break;
+
+            using var stream = OpenBoundedNestedArchiveStream(entry);
+            using var nestedArchive = new ZipArchive(stream, ZipArchiveMode.Read);
+            if (nestedArchive.Entries.Count > MaxNestedEntries) continue;
+
+            var entryName = FindCoverImageFilename(archivePath, nestedArchive.Entries.Select(e => e.FullName));
+            if (entryName == null) continue;
+
+            var nestedEntry = nestedArchive.Entries.Single(e => e.FullName == entryName);
+            if (!IsSafeNestedImageEntry(nestedEntry)) continue;
+
+            using var nestedEntryStream = nestedEntry.Open();
+            return imageService.WriteCoverThumbnail(nestedEntryStream, fileName, outputDirectory, format, size);
+        }
+
+        return string.Empty;
     }
 
     private static bool IsSafeNestedImageEntry(ZipArchiveEntry entry)
