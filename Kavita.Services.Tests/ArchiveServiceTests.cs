@@ -77,6 +77,71 @@ public class ArchiveServiceTests
         _testOutputHelper.WriteLine($"Processed Original in {sw.ElapsedMilliseconds} ms");
     }
 
+    [Fact]
+    public void GetNumberOfPagesFromArchive_NestedZip()
+    {
+        var testDirectory = Path.Join(Directory.GetCurrentDirectory(), "../../../Test Data/ArchiveService/Archives");
+        var archivePath = Path.Join(testDirectory, "nested zip.cbz");
+
+        CreateNestedZipArchive(archivePath);
+
+        try
+        {
+            Assert.Equal(2, _archiveService.GetNumberOfPagesFromArchive(archivePath));
+        }
+        finally
+        {
+            File.Delete(archivePath);
+        }
+    }
+
+    [Fact]
+    public void GetNumberOfPagesFromArchive_NestedZip_IgnoresBlacklistedEntries()
+    {
+        var testDirectory = Path.Join(Directory.GetCurrentDirectory(), "../../../Test Data/ArchiveService/Archives");
+        var archivePath = Path.Join(testDirectory, "nested zip blacklisted.cbz");
+
+        CreateNestedZipArchive(archivePath, nestedArchive =>
+        {
+            CreateArchiveEntry(nestedArchive, "001.jpg");
+            CreateArchiveEntry(nestedArchive, "__MACOSX/002.jpg");
+            CreateArchiveEntry(nestedArchive, "._003.jpg");
+        });
+
+        try
+        {
+            Assert.Equal(1, _archiveService.GetNumberOfPagesFromArchive(archivePath));
+        }
+        finally
+        {
+            File.Delete(archivePath);
+        }
+    }
+
+    [Fact]
+    public void GetNumberOfPagesFromArchive_NestedZip_IgnoresSecondLevelArchives()
+    {
+        var testDirectory = Path.Join(Directory.GetCurrentDirectory(), "../../../Test Data/ArchiveService/Archives");
+        var archivePath = Path.Join(testDirectory, "nested zip second level.cbz");
+
+        CreateNestedZipArchive(archivePath, nestedArchive =>
+        {
+            var secondLevelEntry = nestedArchive.CreateEntry("second-level.zip");
+            using var secondLevelStream = secondLevelEntry.Open();
+            using var secondLevelArchive = new ZipArchive(secondLevelStream, ZipArchiveMode.Create);
+            CreateArchiveEntry(secondLevelArchive, "001.jpg");
+        });
+
+        try
+        {
+            Assert.Equal(0, _archiveService.GetNumberOfPagesFromArchive(archivePath));
+        }
+        finally
+        {
+            File.Delete(archivePath);
+        }
+    }
+
 
 
     [Theory]
@@ -120,6 +185,31 @@ public class ArchiveServiceTests
         _testOutputHelper.WriteLine($"Processed in {sw.ElapsedMilliseconds} ms");
 
         _directoryService.ClearAndDeleteDirectory(extractDirectory);
+    }
+
+    [Fact]
+    public void CanExtractArchive_NestedZip()
+    {
+        var testDirectory = Path.Join(Directory.GetCurrentDirectory(), "../../../Test Data/ArchiveService/Archives");
+        var archivePath = Path.Join(testDirectory, "nested zip.cbz");
+        var extractDirectory = Path.Join(testDirectory, "Extraction");
+
+        _directoryService.ClearAndDeleteDirectory(extractDirectory);
+        CreateNestedZipArchive(archivePath);
+
+        try
+        {
+            _archiveService.ExtractArchive(archivePath, extractDirectory);
+
+            var extractedFiles = _directoryService.GetFiles(extractDirectory, searchOption: SearchOption.AllDirectories).ToList();
+            Assert.Equal(2, extractedFiles.Count);
+            Assert.All(extractedFiles, file => Assert.True(Parser.IsImage(file)));
+        }
+        finally
+        {
+            _directoryService.ClearAndDeleteDirectory(extractDirectory);
+            File.Delete(archivePath);
+        }
     }
 
 
@@ -393,4 +483,32 @@ public class ArchiveServiceTests
     }
 
     #endregion
+
+    private static void CreateNestedZipArchive(string archivePath)
+    {
+        CreateNestedZipArchive(archivePath, nestedArchive =>
+        {
+            CreateArchiveEntry(nestedArchive, "001.jpg");
+            CreateArchiveEntry(nestedArchive, "chapter/002.png");
+        });
+    }
+
+    private static void CreateNestedZipArchive(string archivePath, Action<ZipArchive> configureNestedArchive)
+    {
+        File.Delete(archivePath);
+
+        using var archive = ZipFile.Open(archivePath, ZipArchiveMode.Create);
+        var nestedEntry = archive.CreateEntry("nested.zip");
+
+        using var nestedStream = nestedEntry.Open();
+        using var nestedArchive = new ZipArchive(nestedStream, ZipArchiveMode.Create);
+        configureNestedArchive(nestedArchive);
+    }
+
+    private static void CreateArchiveEntry(ZipArchive archive, string entryName)
+    {
+        var entry = archive.CreateEntry(entryName);
+        using var entryStream = entry.Open();
+        entryStream.WriteByte(1);
+    }
 }

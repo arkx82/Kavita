@@ -33,6 +33,12 @@ public class ArchiveService(
     : IArchiveService
 {
     private const string ComicInfoFilename = "ComicInfo.xml";
+    private const int MaxNestedArchivesPerArchive = 50;
+    private const long MaxNestedArchiveBytes = 512L * 1024L * 1024L;
+    private const int MaxNestedEntries = 10_000;
+    private const long MaxNestedImageBytes = 100L * 1024L * 1024L;
+    private const long MaxNestedTotalImageBytes = 2L * 1024L * 1024L * 1024L;
+    private const double MaxCompressionRatio = 100D;
 
     /// <summary>
     /// Checks if a File can be opened. Requires up to 2 opens of the filestream.
@@ -81,7 +87,7 @@ public class ArchiveService(
                 case ArchiveLibrary.Default:
                 {
                     using var archive = ZipFile.OpenRead(archivePath);
-                    return archive.Entries.Count(e => !Parser.HasBlacklistedFolderInPath(e.FullName) && Parser.IsImage(e.FullName));
+                    return archive.Entries.Count(IsReadableImageEntry) + CountNestedZipImages(archive.Entries);
                 }
                 case ArchiveLibrary.SharpCompress:
                 {
@@ -389,6 +395,95 @@ public class ArchiveService(
                && !name.StartsWith(Parser.MacOsMetadataFileStartsWith);
     }
 
+    private static bool IsReadableImageEntry(ZipArchiveEntry entry)
+    {
+        return !string.IsNullOrEmpty(entry.Name)
+               && !entry.FullName.StartsWith(Parser.MacOsMetadataFileStartsWith)
+               && !Parser.HasBlacklistedFolderInPath(entry.FullName)
+               && Parser.IsImage(entry.FullName);
+    }
+
+    private static bool IsSupportedNestedZipEntry(ZipArchiveEntry entry)
+    {
+        return !string.IsNullOrEmpty(entry.Name)
+               && !entry.FullName.StartsWith(Parser.MacOsMetadataFileStartsWith)
+               && !Parser.HasBlacklistedFolderInPath(entry.FullName)
+               && (entry.FullName.EndsWith(".zip", StringComparison.OrdinalIgnoreCase)
+                   || entry.FullName.EndsWith(".cbz", StringComparison.OrdinalIgnoreCase))
+               && entry.Length is > 0 and <= MaxNestedArchiveBytes
+               && IsCompressionRatioSafe(entry.CompressedLength, entry.Length);
+    }
+
+    private static bool IsCompressionRatioSafe(long compressedLength, long uncompressedLength)
+    {
+        if (compressedLength <= 0) return false;
+
+        return (double) uncompressedLength / compressedLength <= MaxCompressionRatio;
+    }
+
+    private static int CountNestedZipImages(IEnumerable<ZipArchiveEntry> entries)
+    {
+        var imageCount = 0;
+        var nestedArchiveCount = 0;
+        long totalImageBytes = 0;
+
+        foreach (var entry in entries.Where(IsSupportedNestedZipEntry))
+        {
+            nestedArchiveCount++;
+            if (nestedArchiveCount > MaxNestedArchivesPerArchive) break;
+
+            using var stream = OpenBoundedNestedArchiveStream(entry);
+            using var nestedArchive = new ZipArchive(stream, ZipArchiveMode.Read);
+            if (nestedArchive.Entries.Count > MaxNestedEntries) continue;
+
+            foreach (var nestedEntry in nestedArchive.Entries.Where(IsReadableImageEntry))
+            {
+                if (!IsSafeNestedImageEntry(nestedEntry)) continue;
+
+                totalImageBytes += nestedEntry.Length;
+                if (totalImageBytes > MaxNestedTotalImageBytes) return imageCount;
+
+                imageCount++;
+            }
+        }
+
+        return imageCount;
+    }
+
+    private static bool IsSafeNestedImageEntry(ZipArchiveEntry entry)
+    {
+        return entry.Length is > 0 and <= MaxNestedImageBytes
+               && IsCompressionRatioSafe(entry.CompressedLength, entry.Length);
+    }
+
+    private static MemoryStream OpenBoundedNestedArchiveStream(ZipArchiveEntry entry)
+    {
+        var memoryStream = new MemoryStream((int) entry.Length);
+        using var entryStream = entry.Open();
+        CopyStreamWithLimit(entryStream, memoryStream, MaxNestedArchiveBytes);
+        memoryStream.Position = 0;
+
+        return memoryStream;
+    }
+
+    private static void CopyStreamWithLimit(Stream source, Stream destination, long byteLimit)
+    {
+        var buffer = new byte[81920];
+        long totalBytes = 0;
+        int bytesRead;
+
+        while ((bytesRead = source.Read(buffer, 0, buffer.Length)) > 0)
+        {
+            totalBytes += bytesRead;
+            if (totalBytes > byteLimit)
+            {
+                throw new KavitaException("nested-archive-entry-too-large");
+            }
+
+            destination.Write(buffer, 0, bytesRead);
+        }
+    }
+
     /// <summary>
     /// This can be null if nothing is found or any errors occur during access
     /// </summary>
@@ -500,10 +595,92 @@ public class ArchiveService(
         if (!archive.HasFiles() && !needsFlattening) return;
 
         archive.ExtractToDirectory(extractPath, true);
+        ExtractNestedZipImages(archive.Entries, extractPath);
+        DeleteNestedArchiveEntries(archive.Entries, extractPath);
         if (!needsFlattening) return;
 
         logger.LogDebug("Extracted archive is nested in root folder, flattening...");
         directoryService.Flatten(extractPath);
+    }
+
+    private void ExtractNestedZipImages(IEnumerable<ZipArchiveEntry> entries, string extractPath)
+    {
+        var nestedArchiveCount = 0;
+        long totalImageBytes = 0;
+
+        foreach (var entry in entries.Where(IsSupportedNestedZipEntry))
+        {
+            nestedArchiveCount++;
+            if (nestedArchiveCount > MaxNestedArchivesPerArchive) break;
+
+            using var stream = OpenBoundedNestedArchiveStream(entry);
+            using var nestedArchive = new ZipArchive(stream, ZipArchiveMode.Read);
+            if (nestedArchive.Entries.Count > MaxNestedEntries) continue;
+
+            var nestedDestination = GetSafeNestedArchiveDestination(extractPath, entry);
+            directoryService.ExistOrCreate(nestedDestination);
+
+            foreach (var nestedEntry in nestedArchive.Entries.Where(IsReadableImageEntry))
+            {
+                if (!IsSafeNestedImageEntry(nestedEntry)) continue;
+
+                totalImageBytes += nestedEntry.Length;
+                if (totalImageBytes > MaxNestedTotalImageBytes) return;
+
+                ExtractNestedImageEntry(nestedEntry, nestedDestination);
+            }
+        }
+    }
+
+    private void DeleteNestedArchiveEntries(IEnumerable<ZipArchiveEntry> entries, string extractPath)
+    {
+        foreach (var entry in entries.Where(IsSupportedNestedZipEntry))
+        {
+            var nestedArchivePath = Path.GetFullPath(Path.Join(extractPath, entry.FullName));
+            if (!IsSubPathOf(extractPath, nestedArchivePath)) continue;
+
+            if (directoryService.FileSystem.File.Exists(nestedArchivePath))
+            {
+                directoryService.FileSystem.File.Delete(nestedArchivePath);
+            }
+        }
+    }
+
+    private static string GetSafeNestedArchiveDestination(string extractPath, ZipArchiveEntry entry)
+    {
+        var nestedFolderPath = Path.ChangeExtension(entry.FullName, null);
+        var destination = Path.GetFullPath(Path.Join(extractPath, nestedFolderPath));
+        if (!IsSubPathOf(extractPath, destination))
+        {
+            throw new KavitaException("nested-archive-invalid-path");
+        }
+
+        return destination;
+    }
+
+    private void ExtractNestedImageEntry(ZipArchiveEntry entry, string destination)
+    {
+        var destinationPath = Path.GetFullPath(Path.Join(destination, entry.FullName));
+        if (!IsSubPathOf(destination, destinationPath))
+        {
+            throw new KavitaException("nested-archive-invalid-path");
+        }
+
+        var destinationDirectory = Path.GetDirectoryName(destinationPath);
+        if (string.IsNullOrEmpty(destinationDirectory)) return;
+
+        directoryService.ExistOrCreate(destinationDirectory);
+        using var source = entry.Open();
+        using var fileStream = directoryService.FileSystem.File.Create(destinationPath);
+        CopyStreamWithLimit(source, fileStream, MaxNestedImageBytes);
+    }
+
+    private static bool IsSubPathOf(string rootPath, string candidatePath)
+    {
+        var root = Path.GetFullPath(rootPath).TrimEnd(Path.DirectorySeparatorChar, Path.AltDirectorySeparatorChar) + Path.DirectorySeparatorChar;
+        var candidate = Path.GetFullPath(candidatePath);
+
+        return candidate.StartsWith(root, StringComparison.OrdinalIgnoreCase);
     }
 
     /// <summary>
