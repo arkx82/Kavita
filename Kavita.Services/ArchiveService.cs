@@ -432,7 +432,7 @@ public class ArchiveService(
         var nestedArchiveCount = 0;
         long totalImageBytes = 0;
 
-        foreach (var entry in entries.Where(IsSupportedNestedZipEntry))
+        foreach (var entry in entries.Where(IsSupportedNestedZipEntry).OrderByNatural(e => e.FullName))
         {
             nestedArchiveCount++;
             if (nestedArchiveCount > MaxNestedArchivesPerArchive) break;
@@ -441,7 +441,7 @@ public class ArchiveService(
             using var nestedArchive = new ZipArchive(stream, ZipArchiveMode.Read);
             if (nestedArchive.Entries.Count > MaxNestedEntries) continue;
 
-            foreach (var nestedEntry in nestedArchive.Entries.Where(IsReadableImageEntry))
+            foreach (var nestedEntry in nestedArchive.Entries.Where(IsReadableImageEntry).OrderByNatural(e => e.FullName))
             {
                 if (!IsSafeNestedImageEntry(nestedEntry)) continue;
 
@@ -460,7 +460,7 @@ public class ArchiveService(
     {
         var nestedArchiveCount = 0;
 
-        foreach (var entry in entries.Where(IsSupportedNestedZipEntry))
+        foreach (var entry in entries.Where(IsSupportedNestedZipEntry).OrderByNatural(e => e.FullName))
         {
             nestedArchiveCount++;
             if (nestedArchiveCount > MaxNestedArchivesPerArchive) break;
@@ -640,7 +640,7 @@ public class ArchiveService(
         var nestedArchiveCount = 0;
         long totalImageBytes = 0;
 
-        foreach (var entry in entries.Where(IsSupportedNestedZipEntry))
+        foreach (var entry in entries.Where(IsSupportedNestedZipEntry).OrderByNatural(e => e.FullName))
         {
             nestedArchiveCount++;
             if (nestedArchiveCount > MaxNestedArchivesPerArchive) break;
@@ -652,7 +652,7 @@ public class ArchiveService(
             var nestedDestination = GetSafeNestedArchiveDestination(extractPath, entry);
             directoryService.ExistOrCreate(nestedDestination);
 
-            foreach (var nestedEntry in nestedArchive.Entries.Where(IsReadableImageEntry))
+            foreach (var nestedEntry in nestedArchive.Entries.Where(IsReadableImageEntry).OrderByNatural(e => e.FullName))
             {
                 if (!IsSafeNestedImageEntry(nestedEntry)) continue;
 
@@ -666,7 +666,7 @@ public class ArchiveService(
 
     private void DeleteNestedArchiveEntries(IEnumerable<ZipArchiveEntry> entries, string extractPath)
     {
-        foreach (var entry in entries.Where(IsSupportedNestedZipEntry))
+        foreach (var entry in entries.Where(IsSupportedNestedZipEntry).OrderByNatural(e => e.FullName))
         {
             var nestedArchivePath = Path.GetFullPath(Path.Join(extractPath, entry.FullName));
             if (!IsSubPathOf(extractPath, nestedArchivePath)) continue;

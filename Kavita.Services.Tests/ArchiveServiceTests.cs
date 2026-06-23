@@ -212,6 +212,39 @@ public class ArchiveServiceTests
         }
     }
 
+    [Fact]
+    public void CanExtractArchive_NestedZip_UsesNaturalSort()
+    {
+        var testDirectory = Path.Join(Directory.GetCurrentDirectory(), "../../../Test Data/ArchiveService/Archives");
+        var archivePath = Path.Join(testDirectory, "nested zip natural sort.cbz");
+        var extractDirectory = Path.Join(testDirectory, "Extraction");
+
+        _directoryService.ClearAndDeleteDirectory(extractDirectory);
+        CreateNestedZipArchive(archivePath, nestedArchive =>
+        {
+            CreateArchiveEntry(nestedArchive, "010.jpg");
+            CreateArchiveEntry(nestedArchive, "011.jpg");
+            CreateArchiveEntry(nestedArchive, "001.jpg");
+            CreateArchiveEntry(nestedArchive, "002.jpg");
+        });
+
+        try
+        {
+            _archiveService.ExtractArchive(archivePath, extractDirectory);
+
+            var extractedFiles = _directoryService.GetFiles(extractDirectory, searchOption: SearchOption.AllDirectories).ToArray();
+            Assert.Equal("001.jpg", Path.GetFileName(CacheService.GetPageFromFiles(extractedFiles, 0)));
+            Assert.Equal("002.jpg", Path.GetFileName(CacheService.GetPageFromFiles(extractedFiles, 1)));
+            Assert.Equal("010.jpg", Path.GetFileName(CacheService.GetPageFromFiles(extractedFiles, 2)));
+            Assert.Equal("011.jpg", Path.GetFileName(CacheService.GetPageFromFiles(extractedFiles, 3)));
+        }
+        finally
+        {
+            _directoryService.ClearAndDeleteDirectory(extractDirectory);
+            File.Delete(archivePath);
+        }
+    }
+
 
     [Theory]
     [InlineData(new [] {"folder.jpg"}, "folder.jpg")]
