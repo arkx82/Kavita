@@ -18,6 +18,8 @@ using Kavita.Models.DTOs.Filtering.v2;
 using Kavita.Models.DTOs.Filtering.v2.Requests;
 using Kavita.Models.DTOs.KavitaPlus;
 using Kavita.Models.DTOs.KavitaPlus.Account;
+using Kavita.Models.DTOs.KavitaPlus.Audit;
+using Kavita.Models.DTOs.KavitaPlus.OAuth;
 using Kavita.Models.DTOs.KavitaPlus.Scrobble;
 using Kavita.Models.DTOs.Scrobbling;
 using Kavita.Models.DTOs.SignalR;
@@ -29,6 +31,7 @@ using Kavita.Models.Entities.Enums.UserPreferences;
 using Kavita.Models.Entities.Metadata;
 using Kavita.Models.Entities.Scrobble;
 using Kavita.Models.Entities.User;
+using Kavita.Models.Extensions;
 using Kavita.Services.Plus.ScrobbleService;
 using Kavita.Services.Scanner;
 using Microsoft.EntityFrameworkCore;
@@ -224,7 +227,7 @@ public class ScrobblingService : IScrobblingService
     ];
     private static readonly IList<ScrobbleProvider> LightNovelProviders =
     [
-        ScrobbleProvider.AniList, ScrobbleProvider.Hardcover, ScrobbleProvider.MangaBaka
+        ScrobbleProvider.AniList, ScrobbleProvider.Hardcover, ScrobbleProvider.MangaBaka, ScrobbleProvider.Mal
     ];
     private static readonly IList<ScrobbleProvider> ComicProviders = Array.Empty<ScrobbleProvider>();
     private static readonly IList<ScrobbleProvider> MangaProviders = [
@@ -302,8 +305,11 @@ public class ScrobblingService : IScrobblingService
 
                 var tokenExpiry = settings.ValidUntilUtc;
 
-                // Send early reminder 5 days before token expiry
-                if (await ShouldSendEarlyReminder(user.Id, tokenExpiry))
+                var canBeRefreshedByKavita = provider.SupportsOAuthTokenRefresh()
+                    && !string.IsNullOrEmpty(settings.RefreshToken);
+
+                // Send early reminder 5 days before token expiry. Unless Kavita can refresh the token for the user
+                if (!canBeRefreshedByKavita && await ShouldSendEarlyReminder(user.Id, tokenExpiry))
                 {
                     await _emailService.SendTokenExpiringSoonEmail(user.Id, provider);
                 }
@@ -1852,6 +1858,7 @@ public class ScrobblingService : IScrobblingService
         await _unitOfWork.CommitAsync(ct);
     }
 
+    [DisableConcurrentExecution(60 * 60 * 60)]
     public async Task SyncProviderInfo(int userId, ScrobbleProvider provider, CancellationToken ct = default)
     {
         _logger.LogDebug("Syncing scrobbling info for {UserId} for {Provider}", userId, provider);
@@ -1867,6 +1874,7 @@ public class ScrobblingService : IScrobblingService
         {
             scrobbleProviderSettings.ValidUntilUtc = DateTime.MinValue;
             scrobbleProviderSettings.UserName = string.Empty;
+            scrobbleProviderSettings.RefreshToken = string.Empty;
 
             _unitOfWork.UserRepository.Update(user);
             await _unitOfWork.CommitAsync(ct);
@@ -1879,45 +1887,82 @@ public class ScrobblingService : IScrobblingService
 
         // TODO: Call HasTokenExpiredForProviderAsync() so we can validate the token authentication, rather than just assuming
 
-        // MAL doesn't use JWT tokens
-        if (provider != ScrobbleProvider.Mal)
+        var userInfo = await _kavitaPlusApiService.GetUserInfo(provider, scrobbleProviderSettings.AuthenticationToken, license, ct);
+        if (!userInfo.IsSuccess)
         {
-            var userInfo = await _kavitaPlusApiService.GetUserInfo(provider, scrobbleProviderSettings.AuthenticationToken, license, ct);
-            if (!userInfo.IsSuccess)
-            {
-                _logger.LogWarning("Failed to sync provider info for {UserId} for {Provider} due to error: {ErrorMessage}", userId, provider, userInfo.ErrorMessage);
-            }
-            else
-            {
-                scrobbleProviderSettings.UserName = userInfo.Data!.Username;
-            }
+            _logger.LogWarning("Failed to sync provider info for {UserId} for {Provider} due to error: {ErrorMessage}", userId, provider, userInfo.ErrorMessage);
 
-            if (provider is ScrobbleProvider.AniList or ScrobbleProvider.Hardcover)
-            {
-                try
+            await _auditService.LogAsync(KavitaPlusAuditCategory.System, KavitaPlusEventType.SystemProviderInfoSync,
+                AuditStatus.Failure, payload: new AuditLogSystemProviderInfoSyncParamsDto
                 {
-                    scrobbleProviderSettings.ValidUntilUtc = TokenService.GetTokenExpiry(scrobbleProviderSettings.AuthenticationToken);
-                }
-                catch (Exception ex)
-                {
-                    _logger.LogError(ex, "Failed to get token expiry for {UserId} for {Provider}", userId, provider);
-                }
-            }
-            else
-            {
-                scrobbleProviderSettings.ValidUntilUtc = DateTime.MaxValue;
-            }
+                    Provider = provider,
+                }, error: userInfo.ErrorMessage, userId: userId, ct: ct);
         }
         else
         {
-            scrobbleProviderSettings.ValidUntilUtc = DateTime.MaxValue;
+            scrobbleProviderSettings.UserName = userInfo.Data!.Username;
+
+            await _auditService.LogAsync(KavitaPlusAuditCategory.System, KavitaPlusEventType.SystemProviderInfoSync,
+                AuditStatus.Success, payload: new AuditLogSystemProviderInfoSyncParamsDto
+                {
+                    Provider = provider,
+                    UserInfo = userInfo.Data,
+                }, userId: userId, ct: ct);
         }
+
+        var tokenExpiry = await GetTokenExpiry(provider, userId, scrobbleProviderSettings.AuthenticationToken, ct);
+        if (tokenExpiry.HasValue)
+        {
+            scrobbleProviderSettings.ValidUntilUtc = tokenExpiry.Value;
+        }
+        else
+        {
+            _logger.LogWarning("Failed to get token expiry for {UserId} for {Provider} assuming invalid", userId, provider);
+            scrobbleProviderSettings.ValidUntilUtc = DateTime.MinValue;
+        }
+
 
         _unitOfWork.UserRepository.Update(user);
         await _unitOfWork.CommitAsync(ct);
 
         await _eventHub.SendMessageToAsync(MessageFactory.ScrobbleProviderUpdated,
             MessageFactory.ScrobbleProviderUpdatedEvent(provider), userId, ct);
+    }
+
+    /// <summary>
+    /// Gets the token expiry for the specified provider and user. If the token is generated by the OAuth flow, calls K+
+    /// for it. Otherwise, assumes it's a JWT token (I.e. only Hardcover for now)
+    /// </summary>
+    /// <param name="provider"></param>
+    /// <param name="userId"></param>
+    /// <param name="token"></param>
+    /// <param name="ct"></param>
+    /// <returns></returns>
+    private async Task<DateTime?> GetTokenExpiry(ScrobbleProvider provider, int userId, string token, CancellationToken ct = default)
+    {
+        var upstream = provider.ToOAuthUpstream();
+        // All upstreams but MangaBaka use JWT tokens
+        if (upstream is not OAuthUpstream.MangaBaka)
+        {
+            try
+            {
+                return TokenService.GetTokenExpiry(token);
+            }
+            catch (Exception ex)
+            {
+                _logger.LogError(ex, "Failed to get token expiry for {UserId} for {Provider}", userId, provider);
+            }
+
+            return null;
+        }
+
+        var tokenExp = await _kavitaPlusApiService.GetTokenExpiry(upstream.Value, token, ct);
+        if (tokenExp.IsSuccess)
+        {
+            return tokenExp.Data;
+        }
+
+        return null;
     }
 
     public async Task<List<int>> FilterLibrariesForProvider(ScrobbleProvider provider, int userId, List<int> libraryIds, CancellationToken ct = default)

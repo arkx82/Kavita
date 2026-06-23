@@ -2,12 +2,12 @@
   "openapi": "3.0.4",
   "info": {
     "title": "Kavita",
-    "description": "Kavita provides a set of APIs authenticated via an Auth Key passed in the `x-api-key` header. Generate an Auth Key under User Settings → Manage Auth Keys, paste it into the Authorize panel, and all Try It requests will include it. Assume all fields of a payload are required unless marked optional. Built against v0.9.0.8",
+    "description": "Kavita provides a set of APIs authenticated via an Auth Key passed in the `x-api-key` header. Generate an Auth Key under User Settings → Manage Auth Keys, paste it into the Authorize panel, and all Try It requests will include it. Assume all fields of a payload are required unless marked optional. Built against v0.9.0.9",
     "license": {
       "name": "GPL-3.0",
       "url": "https://github.com/Kareadita/Kavita/blob/develop/LICENSE"
     },
-    "version": "0.9.0.8"
+    "version": "0.9.0.9"
   },
   "servers": [
     {
@@ -8036,6 +8036,76 @@
                 }
               }
             }
+          }
+        }
+      }
+    },
+    "/api/OAuth/start": {
+      "get": {
+        "tags": [
+          "OAuth"
+        ],
+        "summary": "Start the OAuth flow for the given upstream, redirect (302!) to KavitaPlus",
+        "parameters": [
+          {
+            "name": "upstream",
+            "in": "query",
+            "description": "",
+            "schema": {
+              "$ref": "#/components/schemas/OAuthUpstream"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "OK"
+          }
+        }
+      }
+    },
+    "/api/OAuth/callback": {
+      "get": {
+        "tags": [
+          "OAuth"
+        ],
+        "summary": "Callback from KavitaPlus.",
+        "parameters": [
+          {
+            "name": "upstream",
+            "in": "query",
+            "description": "",
+            "schema": {
+              "$ref": "#/components/schemas/OAuthUpstream"
+            }
+          },
+          {
+            "name": "token",
+            "in": "query",
+            "description": "",
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "apiKey",
+            "in": "query",
+            "description": "Encrypted ApiKey",
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "refreshToken",
+            "in": "query",
+            "description": "",
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "OK"
           }
         }
       }
@@ -25375,22 +25445,25 @@
           0,
           1,
           2,
-          3
+          3,
+          4
         ],
         "type": "integer",
-        "description": "Members:\n- `0` — Match\n- `1` — Metadata\n- `2` — Scrobble\n- `3` — Sync",
+        "description": "Members:\n- `0` — Match\n- `1` — Metadata\n- `2` — Scrobble\n- `3` — Sync\n- `4` — System",
         "format": "int32",
         "x-enum-varnames": [
           "Match",
           "Metadata",
           "Scrobble",
-          "Sync"
+          "Sync",
+          "System"
         ],
         "x-enum-descriptions": [
           "Match",
           "Metadata",
           "Scrobble",
-          "Sync"
+          "Sync",
+          "System"
         ]
       },
       "KavitaPlusAuditEntryDto": {
@@ -25466,6 +25539,9 @@
           },
           "metadataExtras": {
             "$ref": "#/components/schemas/KavitaPlusAuditMetadataExtrasDto"
+          },
+          "systemDetails": {
+            "$ref": "#/components/schemas/KavitaPlusAuditSystemDetailsDto"
           },
           "canRetry": {
             "type": "boolean"
@@ -25731,6 +25807,23 @@
         },
         "additionalProperties": false
       },
+      "KavitaPlusAuditSystemDetailsDto": {
+        "type": "object",
+        "properties": {
+          "provider": {
+            "$ref": "#/components/schemas/ScrobbleProvider"
+          },
+          "validUntilUtc": {
+            "type": "string",
+            "format": "date-time",
+            "nullable": true
+          },
+          "userInfo": {
+            "$ref": "#/components/schemas/KavitaPlusUserInfo"
+          }
+        },
+        "additionalProperties": false
+      },
       "KavitaPlusBillingInterval": {
         "enum": [
           0,
@@ -25780,10 +25873,12 @@
           57,
           60,
           61,
-          62
+          62,
+          80,
+          81
         ],
         "type": "integer",
-        "description": "Members:\n- `0` — SeriesMatched\n- `1` — SeriesMatchFailed\n- `2` — SeriesBlacklisted\n- `3` — SeriesMatchFixed\n- `4` — SeriesDontMatchSet\n- `10` — MetadataFetched\n- `11` — MetadataUpdated\n- `13` — CoverUpdated\n- `20` — ChapterMetadataUpdated\n- `21` — ChapterCoverUpdated\n- `30` — PersonCoverUpdated\n- `31` — PersonAliasAdded\n- `40` — CollectionSynced\n- `41` — CollectionItemAdded\n- `50` — ScrobbleEventCreated\n- `51` — ScrobbleEventUpdated\n- `52` — ScrobbleEventSent\n- `53` — ScrobbleEventFailed\n- `54` — ScrobbleRateLimitHit\n- `55` — ScrobbleEventSkipped\n- `56` — ScrobbleHoldRemoved\n- `57` — ScrobbleHoldAdded\n- `60` — SyncStarted\n- `61` — SyncCompleted\n- `62` — SyncFailed",
+        "description": "Members:\n- `0` — SeriesMatched\n- `1` — SeriesMatchFailed\n- `2` — SeriesBlacklisted\n- `3` — SeriesMatchFixed\n- `4` — SeriesDontMatchSet\n- `10` — MetadataFetched\n- `11` — MetadataUpdated\n- `13` — CoverUpdated\n- `20` — ChapterMetadataUpdated\n- `21` — ChapterCoverUpdated\n- `30` — PersonCoverUpdated\n- `31` — PersonAliasAdded\n- `40` — CollectionSynced\n- `41` — CollectionItemAdded\n- `50` — ScrobbleEventCreated\n- `51` — ScrobbleEventUpdated\n- `52` — ScrobbleEventSent\n- `53` — ScrobbleEventFailed\n- `54` — ScrobbleRateLimitHit\n- `55` — ScrobbleEventSkipped\n- `56` — ScrobbleHoldRemoved\n- `57` — ScrobbleHoldAdded\n- `60` — SyncStarted\n- `61` — SyncCompleted\n- `62` — SyncFailed\n- `80` — SystemTokenRefresh\n- `81` — SystemProviderInfoSync",
         "format": "int32",
         "x-enum-varnames": [
           "SeriesMatched",
@@ -25810,7 +25905,9 @@
           "ScrobbleHoldAdded",
           "SyncStarted",
           "SyncCompleted",
-          "SyncFailed"
+          "SyncFailed",
+          "SystemTokenRefresh",
+          "SystemProviderInfoSync"
         ],
         "x-enum-descriptions": [
           "SeriesMatched",
@@ -25837,7 +25934,9 @@
           "ScrobbleHoldAdded",
           "SyncStarted",
           "SyncCompleted",
-          "SyncFailed"
+          "SyncFailed",
+          "SystemTokenRefresh",
+          "SystemProviderInfoSync"
         ]
       },
       "KavitaPlusLicenseUsageDto": {
@@ -26063,6 +26162,19 @@
           "Cancelling",
           "Expired"
         ]
+      },
+      "KavitaPlusUserInfo": {
+        "required": [
+          "username"
+        ],
+        "type": "object",
+        "properties": {
+          "username": {
+            "type": "string",
+            "nullable": true
+          }
+        },
+        "additionalProperties": false
       },
       "KeyBind": {
         "required": [
@@ -26373,6 +26485,10 @@
             "type": "boolean"
           },
           "discordId": {
+            "type": "string",
+            "nullable": true
+          },
+          "discordUsername": {
             "type": "string",
             "nullable": true
           },
@@ -27235,6 +27351,29 @@
           }
         },
         "additionalProperties": false
+      },
+      "OAuthUpstream": {
+        "enum": [
+          0,
+          1,
+          2,
+          3
+        ],
+        "type": "integer",
+        "description": "Members:\n- `0` — Discord\n- `1` — MangaBaka\n- `2` — AniList\n- `3` — MyAnimeList",
+        "format": "int32",
+        "x-enum-varnames": [
+          "Discord",
+          "MangaBaka",
+          "AniList",
+          "MyAnimeList"
+        ],
+        "x-enum-descriptions": [
+          "Discord",
+          "MangaBaka",
+          "AniList",
+          "MyAnimeList"
+        ]
       },
       "OidcConfigDto": {
         "type": "object",
@@ -29715,6 +29854,10 @@
             "nullable": true
           },
           "authenticationToken": {
+            "type": "string",
+            "nullable": true
+          },
+          "refreshToken": {
             "type": "string",
             "nullable": true
           },
@@ -33041,6 +33184,10 @@
           "authenticationToken": {
             "type": "string",
             "nullable": true
+          },
+          "refreshToken": {
+            "type": "string",
+            "nullable": true
           }
         },
         "additionalProperties": false
@@ -34189,6 +34336,9 @@
     },
     {
       "name": "Metadata"
+    },
+    {
+      "name": "OAuth"
     },
     {
       "name": "Oidc"

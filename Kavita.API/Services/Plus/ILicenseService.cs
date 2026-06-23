@@ -19,4 +19,5 @@ public interface ILicenseService
     Task<IList<KavitaPlusProductInfoDto>> GetProducts(CancellationToken ct = default);
     Task<string?> RenewLicense(RenewKavitaPlusLicenseDto dto, CancellationToken ct);
     Task<bool> ChangeEmail(ChangeEmailOnLicenseDto dto, CancellationToken ct);
+    Task LinkDiscord(string discordId, string discordUsername, CancellationToken ct = default);
 }

@@ -965,9 +965,7 @@
         "license-length-validation": "License key is expected to be 19 characters long",
         "license-format-validation": "License is expected to be formatted as: XXXX-XXXX-XXXX-XXXX",
         "discord-format-validation": "Discord ID expected to be 19 number user id",
-        "email-format-validation": "Must be a valid email address",
-        "connect-with-discord": "Connect with Discord",
-        "connect-with-discord-help": "Or {{connectWithDiscordBtn}} to fill this out automatically"
+        "email-format-validation": "Must be a valid email address"
     },
 
     "manage-license-key-modal": {
@@ -1202,7 +1200,9 @@
         "connect-title": "Connect Discord",
         "connect-subtitle": "Access exclusive channels and show your flair",
         "connect-button": "Connect",
-        "connected-label": "Discord Connected"
+        "connected-label": "Discord Connected",
+        "connecting-title": "Connecting",
+        "connecting-subtitle": "Kavita is linking your discord in the background, stand by..."
     },
 
     "expired-license-info-card": {
@@ -1680,7 +1680,11 @@
         "sync-failed-collection": "Sync failed for {{collectionName}}",
         "sync-completed-want-to-read": "{{seriesMatched}} series matched for {{userName}}",
         "read-status-update": "Status {{status}}",
-        "series-matched-against": "Matched against \"{{matchName}}\""
+        "series-matched-against": "Matched against \"{{matchName}}\"",
+        "system-token-refresh-success": "Refresh authentication tokens for {{provider}}. They are valid until {{validUntil}}",
+        "system-token-refresh-failure": "Failed to refresh authentication tokens for {{provider}}",
+        "system-provider-info-sync-success": "Successfully synced information for {{provider}}. Linked to account {{username}}",
+        "system-provider-info-sync-failure": "Failed to sync account information for {{provider}}"
     },
 
     "kavita-plus-event-type-pipe": {
@@ -1708,7 +1712,9 @@
         "scrobble-hold-removed": "Scrobble Hold Removed",
         "sync-started": "Sync Started",
         "sync-completed": "Sync Completed",
-        "sync-failed": "Sync Failed"
+        "sync-failed": "Sync Failed",
+        "system-provider-info-sync": "Scrobble Provider Info Sync",
+        "system-token-refresh": "Scrobble Provider token refresh"
     },
 
     "audit-log-messages": {
@@ -2636,7 +2642,8 @@
         "dropped-series-rule-status-aria": "Dropped series transition status",
         "dropped-series-rule-excluded-publication-aria": "Excluded publication statuses for dropped series rule",
         "backfill-events": "{{manage-user-scrobble-provider-modal.generate-scrobble-events}}",
-        "anilist-warning": "AniList sync may be slower during busy periods. MangaBaka offers a larger library and consistently faster syncing."
+        "anilist-warning": "AniList sync may be slower during busy periods. MangaBaka offers a larger library and consistently faster syncing.",
+        "loading-background": "Kavita is loading your connection in the background, stand by..."
     },
 
     "manage-user-scrobble-provider-modal": {
@@ -2645,13 +2652,16 @@
         "title": "Manage your authentication details for {{provider}}",
         "username-label": "Username",
         "authentication-token-label": "Authentication Token",
+        "refresh-token-label": "Refresh token",
         "valid-until-label": "Valid Until",
         "last-synced-label": "Last synced",
         "not-synced": "Not yet synced",
         "event-generation-label": "Last scrobble backfill",
         "event-generation-not-run": "Backfill not yet ran",
         "generate": "Generate",
-        "generate-scrobble-events": "Backfill Events"
+        "generate-scrobble-events": "Backfill Events",
+        "connect-label": "Connect Account",
+        "connect-tooltip": "You will be redirected to Kavita+ and the Scrobble provider"
     },
 
     "scrobble-provider-description-pipe": {
