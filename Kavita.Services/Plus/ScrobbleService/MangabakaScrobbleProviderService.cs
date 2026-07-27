@@ -23,11 +23,16 @@ public class MangabakaScrobbleProviderService(ILogger<MangabakaScrobbleProviderS
     protected override IReadOnlyList<ScrobbleEventType> SupportedEvents =>
     [
         ScrobbleEventType.ChapterRead, ScrobbleEventType.AddWantToRead, ScrobbleEventType.RemoveWantToRead,
-        ScrobbleEventType.ScoreUpdated, ScrobbleEventType.ReadStatusUpdate
+        ScrobbleEventType.ScoreUpdated, ScrobbleEventType.ReadStatusUpdate, ScrobbleEventType.Review
     ];
     protected override void SetScrobbleIds(ScrobbleEvent evt, Series series)
     {
         evt.MangabakaId = series.MangaBakaId;
+    }
+
+    protected override bool HasRequiredIds(Series series)
+    {
+        return series.MangaBakaId > 0;
     }
 
     // MangaBaka is technically unlimited and server-wide (API keys), but we still pace it to be polite (~80/min)

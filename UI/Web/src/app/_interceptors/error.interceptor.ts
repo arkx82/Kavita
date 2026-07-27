@@ -29,6 +29,9 @@ export const errorInterceptor: HttpInterceptorFn = (req, next) => {
         case 401:
           handleAuthError(req, error, accountService, toastr, baseURL);
           break;
+        case 403:
+          handleForbiddenError(error, toastr);
+          break;
         case 404:
           handleNotFound(toastr);
           break;
@@ -44,6 +47,7 @@ export const errorInterceptor: HttpInterceptorFn = (req, next) => {
             toastr.previousToastMessage !== genericError) {
             toast(genericError, toastr);
           }
+          console.error(error);
           break;
       }
       return throwError(() => error);
@@ -93,6 +97,15 @@ function handleValidationError(error: any, toastr: ToastrService) {
         translate('errors.error-code', {num: error.status}));
     }
   }
+}
+
+function handleForbiddenError(error: any, toastr: ToastrService) {
+  const msg = error.error?.message ?? error.error;
+  if (typeof msg === 'string' && msg.trim() !== '') {
+    toast(msg, toastr);
+    return;
+  }
+  toast('errors.generic', toastr);
 }
 
 function handleNotFound(toastr: ToastrService) {

@@ -1,8 +1,8 @@
 import {
   ChangeDetectionStrategy,
   ChangeDetectorRef,
-  Component,
-  DestroyRef,
+  Component, computed,
+  DestroyRef, effect,
   inject,
   Input,
   OnInit,
@@ -28,7 +28,6 @@ import {
 import {ConfirmService} from 'src/app/shared/confirm.service';
 import {UtilityService} from 'src/app/shared/_services/utility.service';
 import {
-  allKavitaPlusMetadataApplicableTypes,
   allLibraryTypes,
   Library,
   LibraryType
@@ -36,7 +35,7 @@ import {
 import {ImageService} from 'src/app/_services/image.service';
 import {LibraryService} from 'src/app/_services/library.service';
 import {UploadService} from 'src/app/_services/upload.service';
-import {takeUntilDestroyed} from "@angular/core/rxjs-interop";
+import {takeUntilDestroyed, toSignal} from "@angular/core/rxjs-interop";
 import {DatePipe, NgTemplateOutlet} from "@angular/common";
 import {SentenceCasePipe} from "../../../_pipes/sentence-case.pipe";
 import {CoverImageChooserComponent} from "../../../cards/cover-image-chooser/cover-image-chooser.component";
@@ -67,6 +66,9 @@ import {modalSaved} from "../../../_models/modal/modal-result";
 import {ModalService} from "../../../_services/modal.service";
 import {Tabs} from "../../../_models/tabs";
 import {TabTitlePipe} from "../../../_pipes/tab-title.pipe";
+import {MetadataProvider} from "../../../_models/kavitaplus/metadata-provider.enum";
+import {map} from "rxjs/operators";
+import {MetadataProviderTitlePipe} from "../../../_pipes/metadata-provider-title.pipe";
 
 enum StepID {
   General = 0,
@@ -79,7 +81,7 @@ enum StepID {
   selector: 'app-library-settings-modal',
   imports: [NgbModalModule, NgbNavLink, NgbNavItem, NgbNavContent, ReactiveFormsModule, NgbTooltip,
     SentenceCasePipe, NgbNav, NgbNavOutlet, CoverImageChooserComponent, TranslocoModule, DefaultDatePipe,
-    FileTypeGroupPipe, EditListComponent, SettingItemComponent, SettingSwitchComponent, SettingButtonComponent, LibraryTypeSubtitlePipe, NgTemplateOutlet, DatePipe, TypeaheadComponent, TabTitlePipe],
+    FileTypeGroupPipe, EditListComponent, SettingItemComponent, SettingSwitchComponent, SettingButtonComponent, LibraryTypeSubtitlePipe, NgTemplateOutlet, DatePipe, TypeaheadComponent, TabTitlePipe, MetadataProviderTitlePipe],
   templateUrl: './library-settings-modal.component.html',
   styleUrls: ['./library-settings-modal.component.scss'],
   changeDetection: ChangeDetectionStrategy.OnPush
@@ -131,8 +133,24 @@ export class LibrarySettingsModalComponent implements OnInit {
     removePrefixForSortName: new FormControl<boolean>(false, { nonNullable: true, validators: [] }),
     inheritWebLinksFromFirstChapter: new FormControl<boolean>(false, { nonNullable: true, validators: []}),
     defaultLanguage: new FormControl<string>('', {nonNullable: true, validators: []}),
+    metadataProvider: new FormControl<MetadataProvider>(MetadataProvider.Mangabaka, {nonNullable: true, validators: []}),
     // TODO: Missing excludePatterns
   });
+
+  selectedLibraryType = toSignal(this.libraryForm.get('type')!.valueChanges.pipe(
+    map(() => this.libraryForm.getRawValue().type as LibraryType),
+  ), { initialValue: LibraryType.Manga });
+
+  supportsMetadata = computed(() => {
+    if (this.validMetadataProviders.hasValue()) {
+      return this.validMetadataProviders.value().length > 0;
+    }
+
+    return false;
+  });
+
+  scrobbleEnabledLibraries = signal<LibraryType[]>([]);
+  validMetadataProviders = this.libraryService.getSupportedMetadataProviders(() => this.selectedLibraryType());
 
   selectedFolders: string[] = [];
   madeChanges = false;
@@ -154,14 +172,16 @@ export class LibrarySettingsModalComponent implements OnInit {
     return  parseInt(this.libraryForm.get('type')?.value + '', 10) as LibraryType;
   }
 
-  get IsKavitaPlusEligible() {
-    const libType = parseInt(this.libraryForm.get('type')?.value + '', 10) as LibraryType;
-    return allKavitaPlusMetadataApplicableTypes.includes(libType);
-  }
+  constructor() {
+    effect(() => {
+      if (!this.validMetadataProviders.hasValue()) return;
+      const validMetadataProviders = this.validMetadataProviders.value();
+      const selectedMetadataProvider = this.libraryForm.get('metadataProvider')!.value as MetadataProvider;
 
-  get IsMetadataDownloadEligible() {
-    const libType = parseInt(this.libraryForm.get('type')?.value + '', 10) as LibraryType;
-    return allKavitaPlusMetadataApplicableTypes.includes(libType);
+      if (!validMetadataProviders.includes(selectedMetadataProvider)) {
+        this.libraryForm.get('metadataProvider')?.setValue(validMetadataProviders[0]);
+      }
+    });
   }
 
   ngOnInit(): void {
@@ -173,20 +193,20 @@ export class LibrarySettingsModalComponent implements OnInit {
     this.chooserConfig = this.coverChooserConfigFactory.forLibrary(this.library);
     this.cdRef.markForCheck();
 
-    if (this.library && !(this.library.type === LibraryType.Manga || this.library.type === LibraryType.LightNovel) ) {
-      this.libraryForm.get('allowScrobbling')?.setValue(false);
-      this.libraryForm.get('allowScrobbling')?.disable();
+    this.libraryService.getLibraryTypesWithScrobbleSupport().pipe(
+      takeUntilDestroyed(this.destroyRef),
+      tap(libraryTypes => {
+        this.scrobbleEnabledLibraries.set(libraryTypes);
 
-      if (this.IsMetadataDownloadEligible) {
-        this.libraryForm.get('allowMetadataMatching')?.setValue(this.library.allowMetadataMatching ?? true);
-        this.libraryForm.get('allowMetadataMatching')?.enable();
-      } else {
-        this.libraryForm.get('allowMetadataMatching')?.setValue(false);
-        this.libraryForm.get('allowMetadataMatching')?.disable();
-      }
-    }
+        if (!libraryTypes.includes(this.library?.type ?? this.LibraryTypeValue)) {
+          this.libraryForm.get('allowScrobbling')?.setValue(false);
+          this.libraryForm.get('allowScrobbling')?.disable();
+        }
 
-
+        // We want scrobbleEnabledLibraries to be loaded before doing this
+        this.setValues();
+      })
+    ).subscribe();
 
     this.libraryForm.get('name')?.valueChanges.pipe(
       debounceTime(100),
@@ -205,7 +225,6 @@ export class LibrarySettingsModalComponent implements OnInit {
       ).subscribe();
 
 
-    this.setValues();
     this.setupLanguageTypeahead().subscribe();
 
     // Turn on/off manage collections/rl
@@ -272,21 +291,15 @@ export class LibrarySettingsModalComponent implements OnInit {
             break;
         }
 
-        this.libraryForm.get('allowScrobbling')?.setValue(this.IsKavitaPlusEligible);
-        this.libraryForm.get('allowMetadataMatching')?.setValue(this.IsKavitaPlusEligible);
-
-        if (!this.IsKavitaPlusEligible) {
+        if (!this.scrobbleEnabledLibraries().includes(libType)) {
+          this.libraryForm.get('allowScrobbling')?.setValue(false);
           this.libraryForm.get('allowScrobbling')?.disable();
         } else {
+          this.libraryForm.get('allowScrobbling')?.setValue(true);
           this.libraryForm.get('allowScrobbling')?.enable();
         }
 
-        if (this.IsMetadataDownloadEligible) {
-          this.libraryForm.get('allowMetadataMatching')?.enable();
-        } else {
-          this.libraryForm.get('allowMetadataMatching')?.disable();
-        }
-
+        this.libraryForm.get('allowMetadataMatching')?.setValue(true);
 
         this.cdRef.markForCheck();
       }),
@@ -305,8 +318,9 @@ export class LibrarySettingsModalComponent implements OnInit {
       this.libraryForm.get('manageCollections')?.setValue(this.library.manageCollections);
       this.libraryForm.get('manageReadingLists')?.setValue(this.library.manageReadingLists);
       this.libraryForm.get('collapseSeriesRelationships')?.setValue(this.library.collapseSeriesRelationships);
-      this.libraryForm.get('allowScrobbling')?.setValue(this.IsKavitaPlusEligible ? this.library.allowScrobbling : false);
-      this.libraryForm.get('allowMetadataMatching')?.setValue(this.IsMetadataDownloadEligible ? this.library.allowMetadataMatching : false);
+      this.libraryForm.get('allowScrobbling')?.setValue(this.scrobbleEnabledLibraries().includes(this.library.type) ? this.library.allowScrobbling : false);
+      this.libraryForm.get('allowMetadataMatching')?.setValue(this.library.allowMetadataMatching);
+      this.libraryForm.get('metadataProvider')?.setValue(this.library.metadataProvider);
       this.libraryForm.get('excludePatterns')?.setValue(this.excludePatterns ? this.library.excludePatterns : false);
       this.libraryForm.get('enableMetadata')?.setValue(this.library.enableMetadata);
       this.libraryForm.get('removePrefixForSortName')?.setValue(this.library.removePrefixForSortName);

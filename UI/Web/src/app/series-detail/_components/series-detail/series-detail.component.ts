@@ -120,6 +120,7 @@ import {patchEntitySignal, patchSignalArray} from "../../../../libs/patch";
 import {ModalService} from "../../../_services/modal.service";
 import {getResolvedData, getWritableResolvedData} from "../../../../libs/route-util";
 import {ExternalSeries} from "../../../_models/series-detail/external-series";
+import {RecommendedSeries} from "../../../_models/series-detail/recommended-series";
 import {Tabs} from "../../../_models/tabs";
 import {TabTitlePipe} from "../../../_pipes/tab-title.pipe";
 import {EntityTitleService} from "../../../_services/entity-title.service";
@@ -128,6 +129,8 @@ import {StatisticsService} from "src/app/_services/statistics.service";
 import {Pagination} from "src/app/_models/pagination";
 import {ReadingHistoryViewerComponent} from "src/app/shared/reading-history-viewer/reading-history-viewer.component";
 import {SeriesUpdateEvent} from "../../../_models/events/series-update-event";
+import {finalize} from "rxjs/operators";
+import {ExternalMetadataUpdateEvent} from "../../../_models/events/external-metadata-update-event";
 
 interface StoryLineItem {
   chapter?: ChapterCardEntity;
@@ -441,8 +444,17 @@ class SeriesDetailComponent implements OnInit, AfterViewInit {
   /**
    * Recommended Series
    */
-  combinedRecs = signal<Array<Series | ExternalSeries>>([]);
+  combinedRecs = signal<Array<RecommendedSeries | ExternalSeries>>([]);
   hasRecommendations = computed(() => this.combinedRecs().length > 0);
+
+  /** Narrows a recommendation item to an owned series (null when it is an external series) */
+  asRecommendedSeries(item: RecommendedSeries | ExternalSeries): RecommendedSeries | null {
+    return 'series' in item ? item : null;
+  }
+
+  asExternalSeries(item: RecommendedSeries | ExternalSeries): ExternalSeries {
+    return item as ExternalSeries;
+  }
 
   showChapterTab = computed(() => this.chapters().length > 0);
   annotations = signal<Annotation[]>([]);
@@ -540,6 +552,10 @@ class SeriesDetailComponent implements OnInit, AfterViewInit {
       } else if (event.event === EVENTS.SeriesUpdated) {
         if ((event.payload as SeriesUpdateEvent).id === this.seriesId()) {
           this.loadPageSource.next(false);
+        }
+      } else if (event.event === EVENTS.ExternalMetadataUpdate) {
+        if ((event.payload as ExternalMetadataUpdateEvent).seriesId === this.seriesId()) {
+          this.loadPageSource.next(true);
         }
       }
     });
@@ -714,6 +730,7 @@ class SeriesDetailComponent implements OnInit, AfterViewInit {
         ...relations.parent.map(item => this.createRelatedSeries(item, RelationKind.Parent)),
         ...relations.editions.map(item => this.createRelatedSeries(item, RelationKind.Edition)),
         ...relations.annuals.map(item => this.createRelatedSeries(item, RelationKind.Annual)),
+        ...relations.cameos.map(item => this.createRelatedSeries(item, RelationKind.Cameo)),
       ]);
     });
   }
@@ -823,29 +840,25 @@ class SeriesDetailComponent implements OnInit, AfterViewInit {
   loadPlusMetadata(seriesId: number, libraryType: LibraryType) {
     this.isLoadingExtra.set(true);
 
-    this.metadataService.getSeriesMetadataFromPlus(seriesId, libraryType).subscribe(data => {
-      if (data === null) {
-        this.isLoadingExtra.set(false);
-        return;
-      }
+    this.metadataService.getSeriesMetadataFromPlus(seriesId, libraryType).pipe(
+      tap(data => {
+        if (data === null) {
+          return;
+        }
 
-      // Reviews
-      this.reviews.set(data.reviews.filter(r => !r.isExternal));
-      this.plusReviews.set(data.reviews.filter(r => r.isExternal));
+        this.reviews.set(data.reviews.filter(r => !r.isExternal));
+        this.plusReviews.set(data.reviews.filter(r => r.isExternal));
 
-      if (data.ratings) {
-        this.ratings.set([...data.ratings]);
-      }
+        if (data.ratings) {
+          this.ratings.set([...data.ratings]);
+        }
 
-
-      // Recommendations
-      if (data.recommendations) {
-        this.combinedRecs.set([...data.recommendations.ownedSeries, ...data.recommendations.externalSeries]);
-      }
-
-
-      this.isLoadingExtra.set(false);
-    });
+        if (data.recommendations) {
+          this.combinedRecs.set([...data.recommendations.ownedSeries, ...data.recommendations.externalSeries]);
+        }
+      }),
+      finalize(() => this.isLoadingExtra.set(false)),
+    ).subscribe();
   }
 
   setContinuePoint() {

@@ -26,6 +26,10 @@ export class KavitaPlusEventDescriptionPipe implements PipeTransform {
   transform(entry: KavitaPlusAuditEntry): string {
     const sd = entry.scrobbleDetails;
     if (sd) {
+      if (entry.eventType === KavitaPlusEventType.ScrobbleEventSkipped) {
+        return '';
+      }
+
       switch (sd.scrobbleEventType) {
         case ScrobbleEventType.ChapterRead: {
           // Note: there can be a discrepancy where creation event says Ch 2 and Sent event says Vol 0 Ch 2 due to
@@ -58,6 +62,8 @@ export class KavitaPlusEventDescriptionPipe implements PipeTransform {
 
     if (entry.eventType === KavitaPlusEventType.ChapterCoverUpdated) {
       return this.translocoService.translate(`${PREFIX}.chapter-cover-updated`, {chapter: entry.metadataExtras!.issueNumber});
+    } else if (entry.eventType === KavitaPlusEventType.VolumeCoverUpdated) {
+      return this.translocoService.translate(`${PREFIX}.volume-cover-updated`, {volume: entry.metadataExtras!.volumeNumber});
     } else if (entry.eventType === KavitaPlusEventType.CoverUpdated) {
       return this.translocoService.translate(`${PREFIX}.series-cover-updated`);
     } else if (entry.eventType === KavitaPlusEventType.SeriesMatchFixed) {

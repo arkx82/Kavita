@@ -1,4 +1,5 @@
 import {ScrobbleProvider} from "../../_services/scrobbling.service";
+import {AgeRating} from "../metadata/age-rating";
 
 export enum PlusMediaFormat {
   Manga = 1,
@@ -25,12 +26,36 @@ export interface MetadataTagDto {
   isAdult: boolean;
 }
 
+export enum EditionEntryType {
+  Chapter = 0,
+  Volume = 1,
+  Other = 2,
+}
+
+export interface ExternalEditionDto {
+  id: string;
+  title: string;
+  format: string;
+  language: string;
+  publisher: string;
+  type: EditionEntryType;
+  /**
+   * Number of entries in the main storyline
+   */
+  mainCount: number;
+  /**
+   * Total number of entries (includes extras, etc.)
+   */
+  totalCount: number;
+}
+
 export interface ExternalSeriesDetail {
   name: string;
   aniListId?: number | null;
   malId?: number | null;
   mangabakaId?: number | null;
   hardcoverId?: number | null;
+  isStandAlone: boolean;
   cbrId?: number | null;
   synonyms: Array<string>;
   plusMediaFormat: PlusMediaFormat;
@@ -51,4 +76,6 @@ export interface ExternalSeriesDetail {
   staff: Array<SeriesStaff>;
   tags: Array<MetadataTagDto>;
   provider: ScrobbleProvider;
+  ageRating: AgeRating;
+  editions: ExternalEditionDto[];
 }

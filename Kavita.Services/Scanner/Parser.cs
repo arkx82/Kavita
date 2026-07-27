@@ -709,6 +709,12 @@ public static partial class Parser
         MatchOptions, RegexTimeout
     );
 
+    // Don't strip parens for cases like rent-a-(really shy)-girlfriend
+    private static readonly Regex GluedParenRegex = new Regex(
+        $@"(?<=[a-z0-9]-?)\({BalancedParen}\)(?=-?[a-z0-9])",
+        MatchOptions, RegexTimeout
+    );
+
     // If SP\d+ is in the filename, we force treat it as a special regardless if volume or chapter might have been found.
     private static readonly Regex SpecialMarkerRegex = new Regex(
         @"SP\d+",
@@ -962,7 +968,11 @@ public static partial class Parser
 
     private static string RemoveEditionTagHolders(string title)
     {
-        title = CleanupRegex.Replace(title, string.Empty);
+        title = CleanupRegex.Replace(title, m =>
+        {
+            var glued = GluedParenRegex.Match(title, m.Index);
+            return glued.Success && glued.Index == m.Index ? m.Value : string.Empty;
+        });
 
         title = MangaEditionRegex.Replace(title, string.Empty);
 

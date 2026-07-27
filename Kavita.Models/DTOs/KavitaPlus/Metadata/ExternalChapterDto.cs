@@ -32,6 +32,10 @@ public sealed record ExternalChapterDto
 
     public string? IssueUrl { get; set; }
 
+    public int? HardcoverId { get; set; }
+
+    public string? MangaBakaWorkId { get; set; }
+
     public IList<UserReviewDto> CriticReviews { get; set; }
     public IList<UserReviewDto> UserReviews { get; set; }
 }

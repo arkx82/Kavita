@@ -1,7 +1,7 @@
 import {ChangeDetectionStrategy, Component, computed, inject, input, output, signal} from '@angular/core';
 import {NgbCollapse} from '@ng-bootstrap/ng-bootstrap';
 import {NgClass} from '@angular/common';
-import {Router} from '@angular/router';
+import {Router, RouterLink} from '@angular/router';
 import {TranslocoDirective} from '@jsverse/transloco';
 import {KavitaPlusAuditEntry} from '../../../_models/kavitaplus/kavita-plus-audit-entry';
 import {KavitaPlusAuditCategory} from '../../../_models/kavitaplus/kavita-plus-audit-category.enum';
@@ -54,6 +54,7 @@ import {tap} from "rxjs";
     UtcToLocalDatePipe,
     TimeDifferencePipe,
     SafeUrlPipe,
+    RouterLink,
   ],
   templateUrl: './kavita-plus-audit-entry.component.html',
   styleUrl: './kavita-plus-audit-entry.component.scss',
@@ -92,6 +93,9 @@ export class KavitaPlusAuditEntryComponent {
     const e = this.entry();
     if (e.subjectId !== null && e.subjectType === AuditSubjectType.Chapter) {
       return this.imageService.getChapterCoverImage(e.subjectId);
+    }
+    if (e.subjectId !== null && e.subjectType === AuditSubjectType.Volume) {
+      return this.imageService.getVolumeCoverImage(e.subjectId);
     }
     if (e.subjectId !== null && e.subjectType === AuditSubjectType.Collection) {
       return this.imageService.getCollectionCoverImage(e.subjectId);
@@ -158,12 +162,6 @@ export class KavitaPlusAuditEntryComponent {
   supportsDiff = computed(() => {
     return [KavitaPlusEventType.MetadataUpdated, KavitaPlusEventType.ChapterMetadataUpdated].includes(this.entry().eventType);
   });
-
-  navigateToSeries() {
-    const e = this.entry();
-    if (e.seriesId == null || e.libraryId == null) return;
-    this.router.navigate(['library', e.libraryId, 'series', e.seriesId]);
-  }
 
   retryEntry() {
     this.retry.emit(this.entry());

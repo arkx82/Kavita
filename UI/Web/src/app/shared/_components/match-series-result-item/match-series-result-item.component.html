@@ -19,8 +19,6 @@
 
       </h3>
       <app-media-format-pill [format]="item().series.plusMediaFormat" />
-      <!--TODO: Figure out if we are doing 1 source or multiple, as of now, this isn't needed-->
-      <!--<app-scrobble-provider-tag-badge [provider]="item().series.provider" />-->
     </div>
 
     <div class="match-result-meta d-flex align-items-center flex-wrap">
@@ -57,7 +55,7 @@
         <app-scrobble-provider-tag-badge [provider]="ScrobbleProvider.Mal" [id]="item().series.malId" />
       }
       @if (item().series.hardcoverId) {
-        <app-scrobble-provider-tag-badge [provider]="ScrobbleProvider.Hardcover" [id]="item().series.hardcoverId" />
+        <app-scrobble-provider-tag-badge [provider]="ScrobbleProvider.Hardcover" [id]="item().series.hardcoverId" [isStandAlone]="item().series.isStandAlone" />
       }
     </div>
 
@@ -87,6 +85,32 @@
     }
 
     <div class="match-result-synopsis">{{ item().series.summary }}</div>
+
+    @if (item().series.editions.length > 0) {
+      <div class="match-result-editions d-flex flex-row flex-wrap gap-1">
+        @for (edition of item().series.editions; track edition.id) {
+          <button type="button"
+                  class="edition-chip d-inline-flex align-items-center"
+                  [class.selected]="isEditionSelected(edition)"
+                  [attr.aria-pressed]="isEditionSelected(edition)"
+                  (click)="chooseEdition(edition, $event)">
+            @if (isEditionSelected(edition)) {
+              <i class="fa-solid fa-check edition-chip-icon" aria-hidden="true"></i>
+            }
+            <span>{{ edition.title }}</span>
+            @if (edition.format) {
+              <span class="edition-chip-format">{{ edition.format }}</span>
+            }
+            @if (edition.mainCount > 0) {
+              <span class="edition-chip-count">{{ t('edition-main-count', {num: edition.mainCount}) }}</span>
+            }
+            @if (edition.totalCount - edition.mainCount > 0) {
+              <span class="edition-chip-count edition-chip-extra">{{ t('edition-extra-count', {num: edition.totalCount - edition.mainCount}) }}</span>
+            }
+          </button>
+        }
+      </div>
+    }
 
   </div>
 

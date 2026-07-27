@@ -6,6 +6,7 @@ using Kavita.API.Services;
 using Kavita.API.Services.Metadata;
 using Kavita.API.Services.Plus;
 using Kavita.API.Services.SignalR;
+using Kavita.Common.Extensions;
 using Kavita.Database;
 using Kavita.Database.Tests;
 using Kavita.Models.Builders;
@@ -2586,11 +2587,70 @@ public class ExternalMetadataServiceTests: AbstractDbTest
                     RomajiTitle = series2.Name,
                 },
                 AniListId = 10,
-                PlusMediaFormat = PlusMediaFormat.Manga
+                Format = PlusMediaFormat.Manga
             }]
         }, 1);
 
         // Repull Series and validate what is overwritten
+        var sourceSeries = await unitOfWork.SeriesRepository.GetSeriesByIdAsync(1, SeriesIncludes.Metadata | SeriesIncludes.Related);
+        Assert.NotNull(sourceSeries);
+        Assert.Single(sourceSeries.Relations);
+        Assert.Equal(series2.Name, sourceSeries.Relations.First().TargetSeries.Name);
+    }
+
+    // Non-Sequel matched purely via an external metadata id - names intentionally do not match the target,
+    // so the relationship can only resolve through the GetSeriesFromExternalMetadata id lookup.
+    [Fact]
+    public async Task Relationships_NonSequel_MatchByExternalId()
+    {
+        var (unitOfWork, context, mapper) = await CreateDatabase();
+        var (externalMetadataService, _, _, _) = await Setup(unitOfWork, context, mapper);
+
+        const string seriesName = "Test - Relationships Source";
+        var series = new SeriesBuilder(seriesName)
+            .WithLibraryId(1)
+            .WithFormat(MangaFormat.Archive)
+            .WithMetadata(new SeriesMetadataBuilder()
+                .Build())
+            .Build();
+        context.Series.Attach(series);
+
+        var series2 = new SeriesBuilder("Test - Relationships Target")
+            .WithLibraryId(1)
+            .WithFormat(MangaFormat.Archive)
+            .WithMangaBakaId(555)
+            .WithMetadata(new SeriesMetadataBuilder()
+                .Build())
+            .Build();
+        context.Series.Attach(series2);
+        await context.SaveChangesAsync();
+
+        var metadataSettings = await unitOfWork.SettingsRepository.GetMetadataSettings();
+        metadataSettings.Enabled = true;
+        metadataSettings.EnableRelationships = true;
+        context.MetadataSettings.Update(metadataSettings);
+        await context.SaveChangesAsync();
+
+        await externalMetadataService.WriteExternalMetadataToSeries(new ExternalSeriesDetailDto()
+        {
+            Name = seriesName,
+            Relations = [new SeriesRelationship()
+            {
+                Relation = RelationKind.SideStory,
+                // Names deliberately do not match series2 - resolution must happen via MangabakaId
+                SeriesName = new ALMediaTitle()
+                {
+                    PreferredTitle = "No Name Match Whatsoever",
+                    EnglishTitle = null,
+                    NativeTitle = "No Name Match Whatsoever",
+                    RomajiTitle = "No Name Match Whatsoever",
+                },
+                MangabakaId = 555,
+                Format = PlusMediaFormat.Manga
+            }]
+        }, 1);
+
+        // Repull Series and validate the relationship resolved via the external id
         var sourceSeries = await unitOfWork.SeriesRepository.GetSeriesByIdAsync(1, SeriesIncludes.Metadata | SeriesIncludes.Related);
         Assert.NotNull(sourceSeries);
         Assert.Single(sourceSeries.Relations);
@@ -2642,7 +2702,7 @@ public class ExternalMetadataServiceTests: AbstractDbTest
                     RomajiTitle = series2.Name,
                 },
                 AniListId = 10,
-                PlusMediaFormat = PlusMediaFormat.Manga
+                Format = PlusMediaFormat.Manga
             }]
         }, 1);
 
@@ -2699,7 +2759,7 @@ public class ExternalMetadataServiceTests: AbstractDbTest
                     RomajiTitle = series2.Name,
                 },
                 AniListId = 10,
-                PlusMediaFormat = PlusMediaFormat.Book
+                Format = PlusMediaFormat.Book
             }]
         }, 1);
 
@@ -2765,7 +2825,7 @@ public class ExternalMetadataServiceTests: AbstractDbTest
                     NativeTitle = series2.Name,
                     RomajiTitle = series2.Name,
                 },
-                PlusMediaFormat = PlusMediaFormat.Manga
+                Format = PlusMediaFormat.Manga
             }]
         }, 2);
 
@@ -2824,7 +2884,7 @@ public class ExternalMetadataServiceTests: AbstractDbTest
                     NativeTitle = series2.Name,
                     RomajiTitle = series2.Name,
                 },
-                PlusMediaFormat = PlusMediaFormat.Manga
+                Format = PlusMediaFormat.Manga
             }]
         }, 1);
 
@@ -2884,7 +2944,7 @@ public class ExternalMetadataServiceTests: AbstractDbTest
                     NativeTitle = "ブルーロック",
                     RomajiTitle = "Blue Lock",
                 },
-                PlusMediaFormat = PlusMediaFormat.Manga,
+                Format = PlusMediaFormat.Manga,
                 AniListId = 106130,
                 MalId = 114745,
                 Provider = ScrobbleProvider.AniList
@@ -3368,6 +3428,116 @@ public class ExternalMetadataServiceTests: AbstractDbTest
 
     #endregion
 
+
+    #region Name (Kavita+ write)
+
+    [Fact]
+    public async Task Name_Enabled_Unlocked_Writes()
+    {
+        var (unitOfWork, context, mapper) = await CreateDatabase();
+        var (externalMetadataService, _, _, _) = await Setup(unitOfWork, context, mapper);
+
+        var series = new SeriesBuilder("Original Name")
+            .WithLibraryId(1)
+            .WithFormat(MangaFormat.Archive)
+            .WithMetadata(new SeriesMetadataBuilder().Build())
+            .Build();
+        context.Series.Attach(series);
+        await context.SaveChangesAsync();
+
+        var metadataSettings = await unitOfWork.SettingsRepository.GetMetadataSettings();
+        metadataSettings.Enabled = true;
+        metadataSettings.EnableName = true;
+        context.MetadataSettings.Update(metadataSettings);
+        await context.SaveChangesAsync();
+
+        await externalMetadataService.WriteExternalMetadataToSeries(new ExternalSeriesDetailDto()
+        {
+            Name = "New K+ Name",
+            Synonyms = []
+        }, 1);
+
+        var postSeries = await unitOfWork.SeriesRepository.GetSeriesByIdAsync(1, SeriesIncludes.Metadata);
+        Assert.NotNull(postSeries);
+        Assert.Equal("New K+ Name", postSeries.Name);
+        Assert.Equal("New K+ Name".ToNormalized(), postSeries.NormalizedName);
+        Assert.True(postSeries.NameLocked);
+    }
+
+    [Fact]
+    public async Task Name_Locked_NoForceOverride_Skipped()
+    {
+        var (unitOfWork, context, mapper) = await CreateDatabase();
+        var (externalMetadataService, _, _, _) = await Setup(unitOfWork, context, mapper);
+
+        var series = new SeriesBuilder("Original Name")
+            .WithLibraryId(1)
+            .WithFormat(MangaFormat.Archive)
+            .WithMetadata(new SeriesMetadataBuilder().Build())
+            .Build();
+        series.NameLocked = true;
+        context.Series.Attach(series);
+        await context.SaveChangesAsync();
+
+        var metadataSettings = await unitOfWork.SettingsRepository.GetMetadataSettings();
+        metadataSettings.Enabled = true;
+        metadataSettings.EnableName = true;
+        metadataSettings.Overrides = []; // no force override for Name
+        context.MetadataSettings.Update(metadataSettings);
+        await context.SaveChangesAsync();
+
+        await externalMetadataService.WriteExternalMetadataToSeries(new ExternalSeriesDetailDto()
+        {
+            Name = "New K+ Name",
+            Synonyms = []
+        }, 1);
+
+        var postSeries = await unitOfWork.SeriesRepository.GetSeriesByIdAsync(1, SeriesIncludes.Metadata);
+        Assert.NotNull(postSeries);
+        Assert.Equal("Original Name", postSeries.Name);
+    }
+
+    [Fact]
+    public async Task Name_WouldCollide_Skipped()
+    {
+        var (unitOfWork, context, mapper) = await CreateDatabase();
+        var (externalMetadataService, _, _, _) = await Setup(unitOfWork, context, mapper);
+
+        // Existing series (Id 1) already owns the name K+ would try to write
+        var existing = new SeriesBuilder("Existing Name")
+            .WithLibraryId(1)
+            .WithFormat(MangaFormat.Archive)
+            .WithMetadata(new SeriesMetadataBuilder().Build())
+            .Build();
+        context.Series.Attach(existing);
+
+        // Target series (Id 2) that K+ is writing to
+        var target = new SeriesBuilder("Original Name")
+            .WithLibraryId(1)
+            .WithFormat(MangaFormat.Archive)
+            .WithMetadata(new SeriesMetadataBuilder().Build())
+            .Build();
+        context.Series.Attach(target);
+        await context.SaveChangesAsync();
+
+        var metadataSettings = await unitOfWork.SettingsRepository.GetMetadataSettings();
+        metadataSettings.Enabled = true;
+        metadataSettings.EnableName = true;
+        context.MetadataSettings.Update(metadataSettings);
+        await context.SaveChangesAsync();
+
+        await externalMetadataService.WriteExternalMetadataToSeries(new ExternalSeriesDetailDto()
+        {
+            Name = "Existing Name",
+            Synonyms = []
+        }, target.Id);
+
+        var postSeries = await unitOfWork.SeriesRepository.GetSeriesByIdAsync(target.Id, SeriesIncludes.Metadata);
+        Assert.NotNull(postSeries);
+        Assert.Equal("Original Name", postSeries.Name);
+    }
+
+    #endregion
 
     private static SeriesStaffDto CreateStaff(string first, string last, string role)
     {

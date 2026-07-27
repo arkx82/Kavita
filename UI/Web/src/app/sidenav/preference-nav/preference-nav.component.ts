@@ -17,7 +17,7 @@ import {SideNavItemComponent} from "../_components/side-nav-item/side-nav-item.c
 import {ActivatedRoute, NavigationEnd, Router} from "@angular/router";
 import {takeUntilDestroyed, toObservable, toSignal} from "@angular/core/rxjs-interop";
 import {SettingFragmentPipe} from "../../_pipes/setting-fragment.pipe";
-import {catchError, map, of, shareReplay, switchMap, take} from "rxjs";
+import {map, of, shareReplay, switchMap, take} from "rxjs";
 import {ServerService} from "../../_services/server.service";
 import {ScrobblingService} from "../../_services/scrobbling.service";
 import {User} from "../../_models/user/user";
@@ -30,8 +30,6 @@ import {KeyBindService} from "../../_services/key-bind.service";
 import {KeyBindTarget} from "../../_models/preferences/preferences";
 import {BreakpointService} from "../../_services/breakpoint.service";
 import {KavitaPlusAuditService} from "../../_services/kavitaplus-audit.service";
-import {KavitaPlusAuditCategory} from "../../_models/kavitaplus/kavita-plus-audit-category.enum";
-import {AuditStatus} from "../../_models/kavitaplus/audit-status.enum";
 
 export enum SettingsTabId {
 
@@ -63,7 +61,7 @@ export enum SettingsTabId {
   // Non-Admin
   Account = 'account',
   Preferences = 'preferences',
-  ScrobbleSettings = 'scrobble-settings',
+  Connections = 'scrobble-settings',
   CustomKeyBinds = 'custom-key-binds',
   ReadingProfiles = 'reading-profiles',
   Font = 'font',
@@ -188,16 +186,8 @@ export class PreferenceNavComponent implements AfterViewInit {
   );
 
   private readonly scrobblingFailuresBadgeCount = toSignal(
-    this.licenseService.checkForValidLicense().pipe(
-      switchMap(hasValidLicense => {
-        const user = this.accountService.currentUser();
-        if (!hasValidLicense || !user) return of(-1);
-
-        return this.kavitaplusAuditService.getMyActivity({category: KavitaPlusAuditCategory.Scrobble, userId: user.id, status: AuditStatus.Failure}).pipe(
-          map(d => d.pagination.totalItems),
-          catchError(() => of(-1))
-        );
-      }),
+    of(this.licenseService.hasActiveLicense()).pipe(
+      switchMap(hasLicense => hasLicense ? this.kavitaplusAuditService.getFailedScrobbleEvents() : of(-1)),
       takeUntilDestroyed(this.destroyRef),
       shareReplay({bufferSize: 1, refCount: true})
     ),
@@ -309,13 +299,13 @@ export class PreferenceNavComponent implements AfterViewInit {
         title: SettingSectionId.KavitaPlusSection,
         children: [
           new SideNavItem(SettingsTabId.KavitaPlusLicense, [Role.Admin]),
+          SideNavItem.kPlusOnly(SettingsTabId.Connections),
           SideNavItem.kPlusOnly(SettingsTabId.ManageUserTokens, [Role.Admin]),
           SideNavItem.kPlusOnly(SettingsTabId.Metadata, [Role.Admin]),
           SideNavItem.kPlusOnly(SettingsTabId.MatchedMetadata, [Role.Admin], this.matchedMetadataBadgeCount),
           SideNavItem.kPlusOnly(SettingsTabId.ScrobblingHolds),
           SideNavItem.kPlusOnly(SettingsTabId.ManageKavitaPlusActivity),
           SideNavItem.kPlusOnly(SettingsTabId.MyActivity, [], this.scrobblingFailuresBadgeCount),
-          SideNavItem.kPlusOnly(SettingsTabId.ScrobbleSettings),
           SideNavItem.kPlusOnly(SettingsTabId.Scrobbling, [], this.scrobblingErrorBadgeCount),
         ]
       }

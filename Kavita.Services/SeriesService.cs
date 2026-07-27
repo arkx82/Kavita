@@ -394,6 +394,10 @@ public class SeriesService(
                 {
                     p.AniListId = personDto.AniListId;
                 }
+                if (!string.IsNullOrEmpty(personDto.HardcoverId)  && p.HardcoverId != personDto.HardcoverId)
+                {
+                    p.HardcoverId = personDto.HardcoverId;
+                }
                 p.Description = string.IsNullOrEmpty(p.Description) ? personDto.Description : p.Description;
                 continue; // If we ever want to update metadata for existing people, we'd do it here
             }
@@ -404,11 +408,11 @@ public class SeriesService(
                 Name = personDto.Name,
                 NormalizedName = normalizedPersonName,
                 AniListId = personDto.AniListId,
+                MalId =  personDto.MalId,
+                HardcoverId = personDto.HardcoverId,
                 Description = personDto.Description,
                 Asin = personDto.Asin,
                 CoverImage = personDto.CoverImage,
-                MalId =  personDto.MalId,
-                HardcoverId = personDto.HardcoverId,
             };
 
             peopleToAdd.Add(newPerson);
@@ -694,6 +698,7 @@ public class SeriesService(
         UpdateRelationForKind(dto.Doujinshis, series.Relations.Where(r => r.RelationKind == RelationKind.Doujinshi).ToList(), series, RelationKind.Doujinshi);
         UpdateRelationForKind(dto.Editions, series.Relations.Where(r => r.RelationKind == RelationKind.Edition).ToList(), series, RelationKind.Edition);
         UpdateRelationForKind(dto.Annuals, series.Relations.Where(r => r.RelationKind == RelationKind.Annual).ToList(), series, RelationKind.Annual);
+        UpdateRelationForKind(dto.Cameos, series.Relations.Where(r => r.RelationKind == RelationKind.Cameo).ToList(), series, RelationKind.Cameo);
 
         await UpdatePrequelSequelRelations(dto.Prequels, series, RelationKind.Prequel);
         await UpdatePrequelSequelRelations(dto.Sequels, series, RelationKind.Sequel);

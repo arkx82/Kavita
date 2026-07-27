@@ -14,11 +14,18 @@ import {ReadMoreComponent} from "../../shared/read-more/read-more.component";
 import {ActionService} from "../../_services/action.service";
 import {ProviderImagePipe} from "../../_pipes/provider-image.pipe";
 import {SeriesFilterField} from "../../_models/metadata/v2/series-filter-field";
+import {AgeRating} from "../../_models/metadata/age-rating";
+import {AgeRatingImageComponent} from "../age-rating-image/age-rating-image.component";
+import {
+  OffCanvasResizeComponent,
+  ResizeMode
+} from "../../shared/_components/off-canvas-resize/off-canvas-resize.component";
+import {BreakpointService} from "../../_services/breakpoint.service";
 
 @Component({
     selector: 'app-series-preview-drawer',
-    imports: [TranslocoDirective, ImageComponent, LoadingComponent, MetadataDetailComponent,
-      PublicationStatusPipe, ReadMoreComponent, NgbTooltip, NgOptimizedImage, ProviderImagePipe],
+  imports: [TranslocoDirective, ImageComponent, LoadingComponent, MetadataDetailComponent,
+    PublicationStatusPipe, ReadMoreComponent, NgbTooltip, NgOptimizedImage, ProviderImagePipe, AgeRatingImageComponent, OffCanvasResizeComponent],
     templateUrl: './series-preview-drawer.component.html',
     styleUrls: ['./series-preview-drawer.component.scss'],
     changeDetection: ChangeDetectionStrategy.OnPush
@@ -29,6 +36,7 @@ export class SeriesPreviewDrawerComponent implements OnInit {
   private readonly seriesService = inject(SeriesService);
   private readonly imageService = inject(ImageService);
   private readonly actionService = inject(ActionService);
+  protected readonly breakpointService = inject(BreakpointService);
 
   protected readonly FilterField = SeriesFilterField;
 
@@ -38,6 +46,7 @@ export class SeriesPreviewDrawerComponent implements OnInit {
   /** Required for non-external series */
   libraryId = input<number>(0);
   aniListId = input<number | undefined>(undefined);
+  mangaBakaId = input<number | undefined>(undefined);
   malId = input<number | undefined>(undefined);
   isExternalSeries = model<boolean>(true);
 
@@ -71,7 +80,7 @@ export class SeriesPreviewDrawerComponent implements OnInit {
 
   ngOnInit() {
     if (this.isExternalSeries()) {
-      this.seriesService.getExternalSeriesDetails(this.aniListId(), this.malId()).subscribe(externalSeries => {
+      this.seriesService.getExternalSeriesDetails(this.aniListId(), this.malId(), this.mangaBakaId(), 0).subscribe(externalSeries => {
         this.externalSeries.set(externalSeries);
         this.isLoading.set(false);
       });
@@ -81,7 +90,7 @@ export class SeriesPreviewDrawerComponent implements OnInit {
 
         // Consider the localSeries has no metadata, try to merge the external Series metadata
         if (this.localSeries()!.summary === '' && this.localSeries()!.genres.length === 0) {
-          this.seriesService.getExternalSeriesDetails(0, 0, this.seriesId()).subscribe(externalSeriesData => {
+          this.seriesService.getExternalSeriesDetails(0, 0, 0, this.seriesId()).subscribe(externalSeriesData => {
             this.isExternalSeries.set(true);
             this.externalSeries.set(externalSeriesData);
           })
@@ -113,4 +122,8 @@ export class SeriesPreviewDrawerComponent implements OnInit {
   close() {
     this.activeOffcanvas.close();
   }
+
+  protected readonly AgeRating = AgeRating;
+  protected readonly ResizeMode = ResizeMode;
+  protected readonly window = window;
 }
