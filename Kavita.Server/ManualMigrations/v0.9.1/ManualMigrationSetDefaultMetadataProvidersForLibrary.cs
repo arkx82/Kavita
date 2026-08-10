@@ -1,4 +1,3 @@
-using System;
 using System.Threading.Tasks;
 using Kavita.Database;
 using Kavita.Models.Entities.Enums;
@@ -24,7 +23,8 @@ public class ManualMigrationSetDefaultMetadataProvidersForLibrary: ManualMigrati
                 LibraryType.Image => MetadataProvider.Mangabaka,
                 LibraryType.LightNovel => MetadataProvider.Mangabaka,
                 LibraryType.ComicVine => MetadataProvider.ComicBookRoundup,
-                _ => throw new ArgumentOutOfRangeException()
+                LibraryType.GDS => MetadataProvider.Mangabaka,
+                _ => MetadataProvider.Mangabaka
             };
         }
 
