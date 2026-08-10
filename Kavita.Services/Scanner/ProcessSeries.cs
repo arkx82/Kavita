@@ -736,7 +736,7 @@ public class ProcessSeries(
     }
 
 
-    private static void UpdateSeriesMetadataTags(ICollection<Tag> metadataTags, IList<Tag> chapterTags)
+    public static void UpdateSeriesMetadataTags(ICollection<Tag> metadataTags, IList<Tag> chapterTags)
     {
         // Create a HashSet of normalized titles for faster lookups
         var chapterTagTitles = new HashSet<string>(chapterTags.Select(t => t.NormalizedTitle));
@@ -764,7 +764,7 @@ public class ProcessSeries(
         }
     }
 
-    private static void UpdateSeriesMetadataGenres(ICollection<Genre> metadataGenres, IList<Genre> chapterGenres)
+    public static void UpdateSeriesMetadataGenres(ICollection<Genre> metadataGenres, IList<Genre> chapterGenres)
     {
         // Create a HashSet of normalized titles for chapterGenres for fast lookup
         var chapterGenreTitles = new HashSet<string>(chapterGenres.Select(g => g.NormalizedTitle));

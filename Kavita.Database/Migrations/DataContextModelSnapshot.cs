@@ -1420,6 +1420,21 @@ namespace Kavita.Database.Migrations
                     b.Property<bool>("FirstLastPeopleNaming")
                         .HasColumnType("INTEGER");
 
+                    b.Property<string>("GlobalLocalizedNameLanguages")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("TEXT")
+                        .HasDefaultValue("ja-Latn");
+
+                    b.Property<string>("GlobalNameLanguages")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("TEXT")
+                        .HasDefaultValue("en");
+
+                    b.Property<string>("LibraryLanguageTitleOverrides")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("TEXT")
+                        .HasDefaultValue("{}");
+
                     b.Property<string>("Overrides")
                         .HasColumnType("TEXT");
 
