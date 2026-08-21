@@ -10,15 +10,7 @@ import {
   signal
 } from '@angular/core';
 import {FormBuilder, FormControl, FormGroup, ReactiveFormsModule, Validators} from '@angular/forms';
-import {
-  NgbActiveModal,
-  NgbCollapse,
-  NgbNav,
-  NgbNavContent,
-  NgbNavItem,
-  NgbNavLink,
-  NgbNavOutlet
-} from '@ng-bootstrap/ng-bootstrap';
+import {NgbActiveModal, NgbCollapse} from '@ng-bootstrap/ng-bootstrap';
 import {concat, delay, forkJoin, last, Observable, of, tap} from 'rxjs';
 import {map, switchMap} from 'rxjs/operators';
 import {UtilityService} from 'src/app/shared/_services/utility.service';
@@ -56,15 +48,15 @@ import {AccountService} from "../../../_services/account.service";
 import {SettingButtonComponent} from "../../../settings/_components/setting-button/setting-button.component";
 import {SettingItemComponent} from "../../../settings/_components/setting-item/setting-item.component";
 import {LicenseService} from "../../../_services/license.service";
-import {DecimalPipe, NgTemplateOutlet, TitleCasePipe} from "@angular/common";
+import {DecimalPipe, NgTemplateOutlet} from "@angular/common";
 import {BreakpointService} from "../../../_services/breakpoint.service";
 import {ActionFactoryService} from "../../../_services/action-factory.service";
 import {ActionItem} from "../../../_models/actionables/action-item";
 import {Action} from "../../../_models/actionables/action";
 import {modalSaved} from "../../../_models/modal/modal-result";
 import {Tabs} from "../../../_models/tabs";
-import {TabTitlePipe} from "../../../_pipes/tab-title.pipe";
 import {
+  addMetadataIdControls,
   EditExternalMetadataFormComponent
 } from "../../../shared/_components/edit-external-metadata-form/edit-external-metadata-form.component";
 import {MangaFormat} from "../../../_models/manga-format";
@@ -75,16 +67,16 @@ import {
 } from "../../../_services/cover-chooser-config-factory.service";
 import {Volume} from "../../../_models/volume";
 import {ConfirmService} from "../../../shared/confirm.service";
+import {EditModalShellComponent} from "../../../shared/edit-modal-shell/edit-modal-shell.component";
+import {EditTabDirective} from "../../../shared/_directive/edit-tab.directive";
+import {AllMetadataProviders, MetadataProvider} from "src/app/_models/kavitaplus/metadata-provider.enum";
+import {MetadataProviderTitlePipe} from "../../../_pipes/metadata-provider-title.pipe";
 
 
 @Component({
   selector: 'app-edit-series-modal',
   imports: [
     ReactiveFormsModule,
-    NgbNav,
-    NgbNavContent,
-    NgbNavItem,
-    NgbNavLink,
     TypeaheadComponent,
     CoverImageChooserComponent,
     EditSeriesRelationComponent,
@@ -96,7 +88,6 @@ import {ConfirmService} from "../../../shared/confirm.service";
     BytesPipe,
     ImageComponent,
     NgbCollapse,
-    NgbNavOutlet,
     DefaultValuePipe,
     TranslocoModule,
     UtcToLocalTimePipe,
@@ -105,9 +96,10 @@ import {ConfirmService} from "../../../shared/confirm.service";
     SettingItemComponent,
     NgTemplateOutlet,
     DecimalPipe,
-    TitleCasePipe,
-    TabTitlePipe,
-    EditExternalMetadataFormComponent
+    EditExternalMetadataFormComponent,
+    EditModalShellComponent,
+    EditTabDirective,
+    MetadataProviderTitlePipe
   ],
   templateUrl: './edit-series-modal.component.html',
   styleUrls: ['./edit-series-modal.component.scss'],
@@ -152,7 +144,8 @@ export class EditSeriesModalComponent implements OnInit {
   editSeriesForm!: FormGroup;
   libraryName: string | undefined = undefined;
   size: number = 0;
-  libraryType = LibraryType.Manga;
+  libraryType = signal<LibraryType>(LibraryType.Manga);
+  protected readonly allMetadataProviders = AllMetadataProviders;
 
 
   // Typeaheads
@@ -170,7 +163,7 @@ export class EditSeriesModalComponent implements OnInit {
   selectedCover: string = '';
   coverImageReset = false;
   coverImageDirty = false;
-  chooserConfig: CoverImageChooserConfig = {};
+  chooserConfig = signal<CoverImageChooserConfig>({});
 
   saveNestedComponents: EventEmitter<void> = new EventEmitter();
 
@@ -189,12 +182,9 @@ export class EditSeriesModalComponent implements OnInit {
   }
 
   ngOnInit(): void {
-
     this.libraryService.getLibraryNames().pipe(takeUntilDestroyed(this.destroyRef)).subscribe(names => {
       this.libraryName = names[this.series.libraryId];
     });
-
-
 
     this.initSeries = Object.assign({}, this.series);
 
@@ -212,7 +202,11 @@ export class EditSeriesModalComponent implements OnInit {
       publicationStatus: new FormControl('', []),
       language: new FormControl('', []),
       releaseYear: new FormControl('', [Validators.minLength(4), Validators.maxLength(4), Validators.pattern(/([1-9]\d{3})|[0]{1}/)]),
+      metadataProviderOverride: new FormControl<MetadataProvider | null>(this.series.metadataProviderOverride ?? null, []),
     });
+
+    addMetadataIdControls(this.editSeriesForm, this.series);
+
     this.cdRef.markForCheck();
 
 
@@ -290,9 +284,9 @@ export class EditSeriesModalComponent implements OnInit {
       const libraryType = res.libraryType;
 
       this.seriesVolumes = volumes;
-      this.libraryType = libraryType;
+      this.libraryType.set(libraryType);
       this.isLoadingVolumes.set(false);
-      this.chooserConfig = this.coverChooserConfigFactory.forSeries(this.series, this.seriesVolumes, this.libraryType);
+      this.chooserConfig.set(this.coverChooserConfigFactory.forSeries(this.series, this.seriesVolumes, this.libraryType()));
 
       volumes.forEach(v => {
         this.volumeCollapsed[v.name] = true;
@@ -515,7 +509,7 @@ export class EditSeriesModalComponent implements OnInit {
     }
 
     let updatedSeries: Series | null = null;
-    
+
     model.nameLocked = this.series.nameLocked;
     model.sortNameLocked = this.series.sortNameLocked;
     model.localizedNameLocked = this.series.localizedNameLocked;
@@ -583,8 +577,7 @@ export class EditSeriesModalComponent implements OnInit {
   handleReset() {
     this.coverImageReset = true;
     this.editSeriesForm.patchValue({ coverImageLocked: false });
-    this.chooserConfig = { ...this.chooserConfig, isLocked: false };
-    this.cdRef.markForCheck();
+    this.chooserConfig.set({ ...this.chooserConfig(), isLocked: false });
   }
 
   unlock(b: any, field: string) {
@@ -605,6 +598,12 @@ export class EditSeriesModalComponent implements OnInit {
       return translate('edit-series-modal.specials-volume');
     }
     return translate('edit-series-modal.volume-num', {num: volume.name});
+  }
+
+  changeTab(tab?: Tabs) {
+    if (!tab) return;
+    this.active = tab;
+    this.cdRef.markForCheck();
   }
 
   protected readonly LooseLeafOrDefaultNumber = LooseLeafOrDefaultNumber;

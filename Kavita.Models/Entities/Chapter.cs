@@ -138,7 +138,7 @@ public class Chapter : IEntityDate, IHasReadTimeEstimate, IHasCoverImage, IHasKP
     public int HardcoverId { get; set; }
     public long MetronId { get; set; }
     public string? ComicVineId { get; set; }
-    public long MangaBakaId { get; set; }
+    public int MangaBakaId { get; set; }
     public int CbrId { get; set; }
 
     #endregion
@@ -217,5 +217,53 @@ public class Chapter : IEntityDate, IHasReadTimeEstimate, IHasCoverImage, IHasKP
             PersonRole.Location => LocationLocked,
             _ => throw new ArgumentOutOfRangeException(nameof(role), role, null)
         };
+    }
+
+    public void LockPersonRole(PersonRole role)
+    {
+        switch (role)
+        {
+            case PersonRole.Writer:
+                WriterLocked = true;
+                break;
+            case PersonRole.Penciller:
+                PencillerLocked = true;
+                break;
+            case PersonRole.Inker:
+                InkerLocked = true;
+                break;
+            case PersonRole.Colorist:
+                ColoristLocked = true;
+                break;
+            case PersonRole.Letterer:
+                LettererLocked = true;
+                break;
+            case PersonRole.CoverArtist:
+                CoverArtistLocked = true;
+                break;
+            case PersonRole.Editor:
+                EditorLocked = true;
+                break;
+            case PersonRole.Publisher:
+                PublisherLocked = true;
+                break;
+            case PersonRole.Character:
+                CharacterLocked = true;
+                break;
+            case PersonRole.Translator:
+                TranslatorLocked = true;
+                break;
+            case PersonRole.Imprint:
+                ImprintLocked = true;
+                break;
+            case PersonRole.Team:
+                TeamLocked = true;
+                break;
+            case PersonRole.Location:
+                LocationLocked = true;
+                break;
+            default:
+                throw new ArgumentOutOfRangeException(nameof(role), role, null);
+        }
     }
 }

@@ -457,6 +457,10 @@ public sealed class DataContext : IdentityDbContext<AppUser, AppRole, int,
             .Property(x => x.AgeRatingMappings)
             .HasJsonConversion([]);
 
+        builder.Entity<MetadataSettings>()
+            .Property(x => x.ExternalAgeRatingMappings)
+            .HasJsonConversion([]);
+
         builder.Entity<SeriesMetadata>()
             .Property(b => b.WebLinks)
             .HasDefaultValue(string.Empty);
@@ -499,6 +503,9 @@ public sealed class DataContext : IdentityDbContext<AppUser, AppRole, int,
             .HasDefaultValue(true);
         builder.Entity<MetadataSettings>()
             .Property(b => b.EnableCoverImage)
+            .HasDefaultValue(true);
+        builder.Entity<MetadataSettings>()
+            .Property(b => b.EnableAgeRating)
             .HasDefaultValue(true);
 
         #endregion
@@ -602,6 +609,10 @@ public sealed class DataContext : IdentityDbContext<AppUser, AppRole, int,
             entity.HasOne(e => e.User)
                 .WithMany()
                 .HasForeignKey(e => e.UserId)
+                .OnDelete(DeleteBehavior.SetNull);
+            entity.HasOne(e => e.ScrobbleError)
+                .WithMany()
+                .HasForeignKey(e => e.ScrobbleErrorId)
                 .OnDelete(DeleteBehavior.SetNull);
         });
 

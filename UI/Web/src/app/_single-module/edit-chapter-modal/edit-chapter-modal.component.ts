@@ -6,12 +6,13 @@ import {
   effect,
   inject,
   Input,
-  OnInit
+  OnInit,
+  signal
 } from '@angular/core';
 import {UtilityService} from "../../shared/_services/utility.service";
 import {FormControl, FormGroup, FormsModule, ReactiveFormsModule, Validators} from "@angular/forms";
 import {NgClass, NgTemplateOutlet, TitleCasePipe} from "@angular/common";
-import {NgbActiveModal, NgbNav, NgbNavContent, NgbNavItem, NgbNavLink, NgbNavOutlet} from "@ng-bootstrap/ng-bootstrap";
+import {NgbActiveModal} from "@ng-bootstrap/ng-bootstrap";
 import {TranslocoDirective} from "@jsverse/transloco";
 import {AccountService} from "../../_services/account.service";
 import {Chapter} from "../../_models/chapter";
@@ -55,14 +56,14 @@ import {Action} from "../../_models/actionables/action";
 import {ActionFactoryService} from "../../_services/action-factory.service";
 import {modalDeleted, modalSaved} from "../../_models/modal/modal-result";
 import {Tabs} from "../../_models/tabs";
-import {TabTitlePipe} from "../../_pipes/tab-title.pipe";
 import {
+  addMetadataIdControls,
   EditExternalMetadataFormComponent
 } from "../../shared/_components/edit-external-metadata-form/edit-external-metadata-form.component";
 import {NULL_DATE} from "../../_pipes/date-year-range.pipe";
-import {EntityTitleService} from "../../_services/entity-title.service";
-import {LibraryService} from "../../_services/library.service";
 import {DownloadEntityType} from "../../shared/_models/download-queue-item";
+import {EditModalShellComponent} from "../../shared/edit-modal-shell/edit-modal-shell.component";
+import {EditTabDirective} from "../../shared/_directive/edit-tab.directive";
 
 
 const blackList = [Action.Edit, Action.IncognitoRead, Action.AddToReadingList];
@@ -71,13 +72,8 @@ const blackList = [Action.Edit, Action.IncognitoRead, Action.AddToReadingList];
   selector: 'app-edit-chapter-modal',
   imports: [
     FormsModule,
-    NgbNav,
-    NgbNavContent,
-    NgbNavLink,
     TranslocoDirective,
-    NgbNavOutlet,
     ReactiveFormsModule,
-    NgbNavItem,
     SettingItemComponent,
     NgTemplateOutlet,
     NgClass,
@@ -93,8 +89,9 @@ const blackList = [Action.Edit, Action.IncognitoRead, Action.AddToReadingList];
     ImageComponent,
     SafeHtmlPipe,
     ReadTimePipe,
-    TabTitlePipe,
     EditExternalMetadataFormComponent,
+    EditModalShellComponent,
+    EditTabDirective,
   ],
   templateUrl: './edit-chapter-modal.component.html',
   styleUrl: './edit-chapter-modal.component.scss',
@@ -115,8 +112,6 @@ export class EditChapterModalComponent implements OnInit {
   private readonly downloadService = inject(DownloadService);
   private readonly chapterService = inject(ChapterService);
   protected readonly breakpointService = inject(BreakpointService);
-  private readonly entityTitleService = inject(EntityTitleService);
-  private readonly libraryService = inject(LibraryService);
   private readonly coverChooserConfigFactory = inject(CoverChooserConfigFactoryService);
 
   @Input({required: true}) chapter!: Chapter;
@@ -129,7 +124,7 @@ export class EditChapterModalComponent implements OnInit {
   selectedCover: string = '';
   coverImageReset = false;
   coverImageDirty = false;
-  chooserConfig: CoverImageChooserConfig = {};
+  chooserConfig = signal<CoverImageChooserConfig>({});
 
 
   tagsSettings: TypeaheadSettings<Tag> = new TypeaheadSettings();
@@ -169,7 +164,7 @@ export class EditChapterModalComponent implements OnInit {
 
     this.size = (<Chapter>this.chapter).files.reduce((sum, v) => sum + v.bytes, 0);
 
-    this.chooserConfig = this.coverChooserConfigFactory.forChapter(this.chapter, this.libraryType, this.seriesId);
+    this.chooserConfig.set(this.coverChooserConfigFactory.forChapter(this.chapter, this.libraryType, this.seriesId));
 
     this.editForm.addControl('titleName', new FormControl(this.chapter.titleName, []));
     this.editForm.addControl('sortOrder', new FormControl(Math.max(0, this.chapter.sortOrder), [Validators.required, Validators.min(0)]));
@@ -177,6 +172,7 @@ export class EditChapterModalComponent implements OnInit {
     this.editForm.addControl('language', new FormControl(this.chapter.language, []));
     this.editForm.addControl('isbn', new FormControl(this.chapter.isbn, []));
     this.editForm.addControl('ageRating', new FormControl(this.chapter.ageRating, []));
+    addMetadataIdControls(this.editForm, this.chapter);
 
     if (this.chapter.releaseDate !== NULL_DATE) {
       this.editForm.addControl('releaseDate', new FormControl(this.chapter.releaseDate.substring(0, 10), []));
@@ -509,12 +505,18 @@ export class EditChapterModalComponent implements OnInit {
   handleReset() {
     this.coverImageReset = true;
     this.editForm.patchValue({ coverImageLocked: false });
-    this.chooserConfig = { ...this.chooserConfig, isLocked: false };
-    this.cdRef.markForCheck();
+    this.chooserConfig.set({ ...this.chooserConfig(), isLocked: false });
   }
 
   getPersonsSettings(role: PersonRole) {
     return this.peopleSettings[role];
+  }
+
+  changeTab(tab?: Tabs) {
+    if (tab) {
+      this.activeId = tab;
+      this.cdRef.markForCheck();
+    }
   }
 
   protected readonly Tabs = Tabs;

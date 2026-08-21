@@ -1,8 +1,7 @@
-import {ChangeDetectionStrategy, ChangeDetectorRef, Component, inject, Input, OnInit} from '@angular/core';
+import {ChangeDetectionStrategy, ChangeDetectorRef, Component, inject, Input, OnInit, signal} from '@angular/core';
 import {FormControl, FormGroup, FormsModule, ReactiveFormsModule} from "@angular/forms";
-import {NgbActiveModal, NgbNav, NgbNavContent, NgbNavItem, NgbNavLink, NgbNavOutlet} from "@ng-bootstrap/ng-bootstrap";
+import {NgbActiveModal} from "@ng-bootstrap/ng-bootstrap";
 import {TranslocoDirective} from "@jsverse/transloco";
-import {NgClass} from "@angular/common";
 import {SettingItemComponent} from "../../settings/_components/setting-item/setting-item.component";
 import {EntityTitleComponent} from "../../cards/entity-title/entity-title.component";
 import {SettingButtonComponent} from "../../settings/_components/setting-button/setting-button.component";
@@ -37,25 +36,21 @@ import {modalDeleted, modalSaved} from "../../_models/modal/modal-result";
 import {VolumeService} from "../../_services/volume.service";
 import {UpdateVolume} from "../../_models/update-volume";
 import {Tabs} from "../../_models/tabs";
-import {TabTitlePipe} from "../../_pipes/tab-title.pipe";
 import {
+  addMetadataIdControls,
   EditExternalMetadataFormComponent
 } from "../../shared/_components/edit-external-metadata-form/edit-external-metadata-form.component";
+import {EditModalShellComponent} from "../../shared/edit-modal-shell/edit-modal-shell.component";
+import {EditTabDirective} from "../../shared/_directive/edit-tab.directive";
 
 
 @Component({
   selector: 'app-edit-volume-modal',
   imports: [
     FormsModule,
-    NgbNav,
-    NgbNavContent,
-    NgbNavLink,
     TranslocoDirective,
-    NgbNavOutlet,
     ReactiveFormsModule,
-    NgbNavItem,
     SettingItemComponent,
-    NgClass,
     EntityTitleComponent,
     SettingButtonComponent,
     CoverImageChooserComponent,
@@ -64,8 +59,9 @@ import {
     UtcToLocalTimePipe,
     BytesPipe,
     ReadTimePipe,
-    TabTitlePipe,
-    EditExternalMetadataFormComponent
+    EditExternalMetadataFormComponent,
+    EditModalShellComponent,
+    EditTabDirective
   ],
   templateUrl: './edit-volume-modal.component.html',
   styleUrl: './edit-volume-modal.component.scss',
@@ -95,7 +91,7 @@ export class EditVolumeModalComponent implements OnInit {
   selectedCover: string = '';
   coverImageReset = false;
   coverImageDirty = false;
-  chooserConfig: CoverImageChooserConfig = {};
+  chooserConfig = signal<CoverImageChooserConfig>({});
 
   tasks = this.actionFactoryService.getActionablesForSettingsPage(this.actionFactoryService.getVolumeActions(this.seriesId, this.libraryId, this.libraryType), this.blacklist);
   /**
@@ -124,8 +120,9 @@ export class EditVolumeModalComponent implements OnInit {
     this.size = this.files.reduce((sum, v) => sum + v.bytes, 0);
 
     this.editForm.addControl('coverImageLocked', new FormControl(this.volume.coverImageLocked, []));
+    addMetadataIdControls(this.editForm, this.volume);
 
-    this.chooserConfig = this.coverChooserConfigFactory.forVolume(this.volume, this.libraryType);
+    this.chooserConfig.set(this.coverChooserConfigFactory.forVolume(this.volume, this.libraryType));
   }
 
   close() {
@@ -191,7 +188,12 @@ export class EditVolumeModalComponent implements OnInit {
   handleReset() {
     this.coverImageReset = true;
     this.editForm.patchValue({ coverImageLocked: false });
-    this.chooserConfig = { ...this.chooserConfig, isLocked: false };
+    this.chooserConfig.set({ ...this.chooserConfig(), isLocked: false });
+  }
+
+  changeTab(tab?: Tabs) {
+    if (!tab) return;
+    this.activeId = tab;
     this.cdRef.markForCheck();
   }
 

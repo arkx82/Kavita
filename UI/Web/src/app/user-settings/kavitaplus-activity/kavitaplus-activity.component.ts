@@ -11,30 +11,36 @@ import {KavitaplusTimelineComponent} from '../../_single-module/kavitaplus-timel
 import {
   KavitaPlusAuditEntryComponent
 } from '../../admin/kavita-plus/kavitaplus-audit-entry/kavita-plus-audit-entry.component';
-import {ScrobbleAccountCardComponent} from '../scrobble-account-card/scrobble-account-card.component';
 import {KavitaPlusEventType} from "../../_models/kavitaplus/kavita-plus-event-type.enum";
 import {Tabs} from "../../_models/tabs";
 import {TabTitlePipe} from "../../_pipes/tab-title.pipe";
 import {Pagination} from '../../_models/pagination';
 import {LicenseService} from '../../_services/license.service';
 import {UserScrobbleProvider} from "../../_models/kavitaplus/scrobble-providers/user-scrobble-provider";
+import {DefaultValuePipe} from "../../_pipes/default-value.pipe";
+import {TimeDifferencePipe} from "../../_pipes/time-difference.pipe";
+import {UtcToLocalDatePipe} from "../../_pipes/utc-to-locale-date.pipe";
+import {KavitaPlusMyAuditStats} from "../../_models/kavitaplus/kavita-plus-audit-stats";
 
 @Component({
   selector: 'app-kavitaplus-activity',
   templateUrl: './kavitaplus-activity.component.html',
   styleUrls: ['./kavitaplus-activity.component.scss'],
   changeDetection: ChangeDetectionStrategy.OnPush,
-  imports: [TranslocoDirective, NgbNav, NgbNavItem, NgbNavLink, KavitaplusTimelineComponent, KavitaPlusAuditEntryComponent, ScrobbleAccountCardComponent, TabTitlePipe],
+  imports: [TranslocoDirective, NgbNav, NgbNavItem, NgbNavLink, KavitaplusTimelineComponent,
+    KavitaPlusAuditEntryComponent, TabTitlePipe, DefaultValuePipe, TimeDifferencePipe, UtcToLocalDatePipe],
 })
 export class KavitaplusActivityComponent implements OnInit {
   private readonly auditService = inject(KavitaPlusAuditService);
   private readonly scrobblingService = inject(ScrobblingService);
   private readonly licenseService = inject(LicenseService);
   private readonly destroyRef = inject(DestroyRef);
-  
+
   private readonly PAGE_SIZE = 50;
   protected readonly tabList = [Tabs.All, Tabs.Scrobbles, Tabs.Failed, Tabs.MyChanges, Tabs.ScrobbleHolds];
 
+  stats = signal<KavitaPlusMyAuditStats | null>(null);
+  nextScrobble = signal<string | null>(null);
   entries = signal<KavitaPlusAuditEntry[]>([]);
   isLoading = signal(true);
   isLoadingMore = signal(false);
@@ -75,6 +81,11 @@ export class KavitaplusActivityComponent implements OnInit {
           }
 
           this.loadData();
+          this.loadStats();
+
+          this.scrobblingService.getNextScrobble()
+            .pipe(takeUntilDestroyed(this.destroyRef))
+            .subscribe(res => this.nextScrobble.set(res));
 
           this.scrobblingService.getScrobbleProviders()
             .pipe(takeUntilDestroyed(this.destroyRef))
@@ -88,8 +99,16 @@ export class KavitaplusActivityComponent implements OnInit {
     this.entries.set([]);
     this.pagination.set(null);
     this.scrobblingProviders.set([]);
+    this.stats.set(null);
+    this.nextScrobble.set(null);
     this.isLoading.set(false);
     this.isLoadingMore.set(false);
+  }
+
+  private loadStats() {
+    this.auditService.getMyStats().pipe(takeUntilDestroyed(this.destroyRef)).subscribe({
+      next: s => this.stats.set(s),
+    });
   }
 
   loadData(reset = true) {
