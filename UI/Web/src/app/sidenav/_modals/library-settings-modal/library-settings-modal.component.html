@@ -162,7 +162,7 @@
               </app-setting-switch>
             </div>
 
-            @if (libraryForm.get('metadataProvider'); as control) {
+            @if (supportsMetadata() && libraryForm.get('metadataProvider'); as control) {
               <div class="row g-0 mt-4 mb-4">
                 <app-setting-item [title]="t('metadata-provider-label')" [subtitle]="t('metadata-provider-tooltip')" [canEdit]="validMetadataProviders.hasValue() && validMetadataProviders.value().length > 1">
                   <ng-template #view>

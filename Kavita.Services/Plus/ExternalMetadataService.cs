@@ -113,7 +113,7 @@ public class ExternalMetadataService : IExternalMetadataService
     /// <returns></returns>
     public static bool IsPlusEligible(LibraryType type)
     {
-        return KavitaPlusConfiguration.MetadataProvidersForLibraryTypes.ContainsKey(type);
+        return KavitaPlusConfiguration.IsPlusEligible(type);
     }
 
     [DisableConcurrentExecution(60 * 60 * 60)]

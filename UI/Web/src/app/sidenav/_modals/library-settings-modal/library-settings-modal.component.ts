@@ -175,6 +175,19 @@ export class LibrarySettingsModalComponent implements OnInit {
     effect(() => {
       if (!this.validMetadataProviders.hasValue()) return;
       const validMetadataProviders = this.validMetadataProviders.value();
+      const metadataMatchingControl = this.libraryForm.get('allowMetadataMatching');
+
+      // Library types that aren't Kavita+ eligible (like GDS, which is driven by kavita.yaml) have no
+      // provider to pick. Mirror how allowScrobbling is handled so a Kavita+ feature can't be switched
+      // on where the backend ignores it, and leave metadataProvider alone rather than blanking it out.
+      if (validMetadataProviders.length === 0) {
+        metadataMatchingControl?.setValue(false);
+        metadataMatchingControl?.disable();
+        return;
+      }
+
+      metadataMatchingControl?.enable();
+
       const selectedMetadataProvider = this.libraryForm.get('metadataProvider')!.value as MetadataProvider;
 
       if (!validMetadataProviders.includes(selectedMetadataProvider)) {

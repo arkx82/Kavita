@@ -778,6 +778,10 @@ public class LibraryController(
 
     private static void ValidateMetadataProvider(LibraryType type, MetadataProvider provider)
     {
+        // Library types that aren't Kavita+ eligible (like GDS, which is driven by kavita.yaml) have
+        // no provider to validate against, and never enter the Kavita+ flows anyway.
+        if (!KavitaPlusConfiguration.IsPlusEligible(type)) return;
+
         if (!KavitaPlusConfiguration.IsValidMetadataProviderForLibraryType(type, provider))
         {
             throw new KavitaException("invalid-metadata-provider");

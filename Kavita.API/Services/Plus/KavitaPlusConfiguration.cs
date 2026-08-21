@@ -86,6 +86,16 @@ public static class KavitaPlusConfiguration
         .Values.SelectMany(s => s).Distinct().ToList().AsReadOnly();
 
     /// <summary>
+    /// Is the given <see cref="LibraryType"/> allowed to interact with Kavita+ at all?
+    /// Types with no providers (like GDS, which is driven by kavita.yaml) are not, so they have
+    /// no provider to validate against and never enter the Kavita+ flows.
+    /// </summary>
+    public static bool IsPlusEligible(LibraryType type)
+    {
+        return MetadataProvidersForLibraryTypes.ContainsKey(type);
+    }
+
+    /// <summary>
     /// Is the given <see cref="MetadataProvider"/> valid (supported) for the given <see cref="LibraryType"/>.
     /// Used to validate both a Library's default provider and a Series-level provider override.
     /// </summary>
