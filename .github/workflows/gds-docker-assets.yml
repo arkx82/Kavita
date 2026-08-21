@@ -25,9 +25,28 @@ permissions:
   contents: write
 
 jobs:
+  test:
+    name: Test
+    runs-on: ubuntu-24.04
+    steps:
+      - name: Checkout Repo
+        uses: actions/checkout@v4
+
+      - name: Setup .NET SDK
+        uses: actions/setup-dotnet@v4
+        with:
+          dotnet-version: 10.0.x
+
+      # Gates the release below. A merge from develop can silently drop GDS out of an
+      # upstream mapping keyed by LibraryType/MangaFormat/FileTypeGroup, so the assets must
+      # not publish until the suite (including the GDS invariant tests) is green.
+      - name: Run tests
+        run: dotnet test Kavita.sln --configuration Release
+
   build-assets:
     name: Build ${{ matrix.rid }} asset
     runs-on: ubuntu-24.04
+    needs: test
     strategy:
       fail-fast: false
       matrix:

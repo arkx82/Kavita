@@ -1047,7 +1047,8 @@ public class DirectoryServiceTests: AbstractFsTest
 
         var allFiles = ds.ScanFiles("C:/Data/", Parser.SupportedExtensions);
 
-        Assert.Equal(5, allFiles.Count);
+        // 6, not 5: GDS added .txt to SupportedExtensions, so Accel World SP01.txt now counts
+        Assert.Equal(6, allFiles.Count);
 
         return Task.CompletedTask;
     }
@@ -1170,15 +1171,27 @@ public class DirectoryServiceTests: AbstractFsTest
     #region GetLastWriteTime
 
     [Fact]
-    public void GetLastWriteTime_ShouldReturnMaxTime_IfNoFiles()
+    public void GetLastWriteTime_ShouldReturnDirectoryTime_IfNoFiles()
     {
+        // GDS changed this from DateTime.MaxValue to the folder's own write time, so an empty
+        // folder no longer reads as "always changed" and forces a rescan every pass.
         const string dir = "C:/manga/";
         var filesystem = new MockFileSystem();
         filesystem.AddDirectory("C:/");
         filesystem.AddDirectory(dir);
         var ds = new DirectoryService(Substitute.For<ILogger<DirectoryService>>(), filesystem);
 
-        Assert.Equal(DateTime.MaxValue, ds.GetLastWriteTime(dir));
+        Assert.Equal(filesystem.Directory.GetLastWriteTime(dir), ds.GetLastWriteTime(dir));
+    }
+
+    [Fact]
+    public void GetLastWriteTime_ShouldReturnMaxTime_IfDirectoryMissing()
+    {
+        var filesystem = new MockFileSystem();
+        filesystem.AddDirectory("C:/");
+        var ds = new DirectoryService(Substitute.For<ILogger<DirectoryService>>(), filesystem);
+
+        Assert.Equal(DateTime.MaxValue, ds.GetLastWriteTime("C:/does-not-exist/"));
     }
 
     #endregion

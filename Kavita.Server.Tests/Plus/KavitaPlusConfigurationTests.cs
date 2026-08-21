@@ -1,3 +1,5 @@
+using System;
+using System.Collections.Generic;
 using Kavita.API.Services.Plus;
 using Kavita.Models.Entities.Enums;
 
@@ -38,6 +40,57 @@ public class KavitaPlusConfigurationTests
                 KavitaPlusConfiguration.IsPlusEligible(type),
                 Kavita.Services.Plus.ExternalMetadataService.IsPlusEligible(type));
         }
+    }
+
+    #endregion
+
+    #region Merge Safety Invariants
+
+    // These pin the GDS <-> Kavita+ boundary. GDS is added as a LibraryType enum member, so when
+    // upstream introduces a new registry keyed by LibraryType, git merges it cleanly and GDS
+    // silently falls out of it. That is how library create/update started rejecting GDS with
+    // invalid-metadata-provider. These tests turn that silent gap into a failing build.
+
+    [Fact]
+    public void EveryLibraryType_IsExplicitlyClassified_ForKavitaPlus()
+    {
+        // Every type must be a deliberate yes/no. A new upstream LibraryType fails here until
+        // someone decides which side it belongs on.
+        var notPlusEligible = new HashSet<LibraryType> { LibraryType.GDS };
+
+        foreach (var type in Enum.GetValues<LibraryType>())
+        {
+            Assert.Equal(!notPlusEligible.Contains(type), KavitaPlusConfiguration.IsPlusEligible(type));
+        }
+    }
+
+    [Fact]
+    public void EveryPlusEligibleType_HasAtLeastOneProvider()
+    {
+        // An empty set would pass IsPlusEligible yet leave the UI dropdown empty and make every
+        // provider fail validation - the same broken state GDS was in.
+        foreach (var (type, providers) in KavitaPlusConfiguration.MetadataProvidersForLibraryTypes)
+        {
+            Assert.True(providers.Count > 0, $"{type} is Plus eligible but has no metadata providers");
+        }
+    }
+
+    [Fact]
+    public void EveryScrobbleType_IsAlsoPlusEligible()
+    {
+        // ScrobblingService gates on IsPlusEligible, which reads the *metadata* registry. A type
+        // with scrobble providers but no metadata providers would never actually scrobble.
+        foreach (var type in KavitaPlusConfiguration.ScrobbleProvidersForLibraryTypes.Keys)
+        {
+            Assert.True(KavitaPlusConfiguration.IsPlusEligible(type),
+                $"{type} has scrobble providers but is not Kavita+ eligible, so scrobbling can never run");
+        }
+    }
+
+    [Fact]
+    public void Gds_HasNoScrobbleProviders()
+    {
+        Assert.False(KavitaPlusConfiguration.ScrobbleProvidersForLibraryTypes.ContainsKey(LibraryType.GDS));
     }
 
     #endregion

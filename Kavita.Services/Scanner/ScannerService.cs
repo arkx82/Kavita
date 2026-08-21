@@ -316,8 +316,8 @@ public class ScannerService(
 
             if (processedSeriesId != null)
             {
-                await RunExtraSeriesWork(scope, serverSettings, scopedLibrary, processedSeriesId.Value,
-                    bypassFolderOptimizationChecks);
+                await RunExtraSeriesWork(scope, serverSettings, scopedLibrary.Id, scopedLibrary.Type,
+                    processedSeriesId.Value, bypassFolderOptimizationChecks);
             }
         }
 
@@ -691,7 +691,7 @@ public class ScannerService(
         IList<Task<long>> tasks = [];
         for (var i = 0; i < usingCount; i++)
         {
-            tasks.Add(Task.Run(async () => await ExtraWorkTask(channel, serverSettings, library.Id, forceUpdate)));
+            tasks.Add(Task.Run(async () => await ExtraWorkTask(channel, serverSettings, library.Id, library.Type, forceUpdate)));
         }
 
         tasks.Add(dbTask);
@@ -714,19 +714,15 @@ public class ScannerService(
     /// <param name="libraryId"></param>
     /// <param name="forceUpdate"></param>
     /// <returns></returns>
-    private async Task<long> ExtraWorkTask(Channel<int> channel, ServerSettingDto serverSettings, int libraryId, bool forceUpdate)
+    private async Task<long> ExtraWorkTask(Channel<int> channel, ServerSettingDto serverSettings, int libraryId,
+        LibraryType libraryType, bool forceUpdate)
     {
         var sw = Stopwatch.StartNew();
 
         await foreach (var seriesId in channel.Reader.ReadAllAsync())
         {
             using var scope = scopeFactory.CreateScope();
-            var unitOfWork = scope.ServiceProvider.GetRequiredService<IUnitOfWork>();
-            var library = await unitOfWork.LibraryRepository.GetLibraryForIdAsync(libraryId,
-                LibraryIncludes.Folders | LibraryIncludes.FileTypes | LibraryIncludes.ExcludePatterns);
-            if (library == null) continue;
-
-            await RunExtraSeriesWork(scope, serverSettings, library, seriesId, forceUpdate);
+            await RunExtraSeriesWork(scope, serverSettings, libraryId, libraryType, seriesId, forceUpdate);
         }
 
         return sw.ElapsedMilliseconds;
@@ -748,10 +744,10 @@ public class ScannerService(
         BackgroundJob.Enqueue(() => wordCountAnalyzerService.ScanSeries(library.Id, seriesId, forceUpdate));
     }
 
-    private static async Task RunExtraSeriesWork(IServiceScope scope, ServerSettingDto serverSettings, Library library,
-        int seriesId, bool forceUpdate)
+    private static async Task RunExtraSeriesWork(IServiceScope scope, ServerSettingDto serverSettings, int libraryId,
+        LibraryType libraryType, int seriesId, bool forceUpdate)
     {
-        if (library.Type == LibraryType.GDS)
+        if (libraryType == LibraryType.GDS)
         {
             var metadataServiceGds = scope.ServiceProvider.GetRequiredService<IMetadataServiceGds>();
             var wordCountAnalyzerServiceGds = scope.ServiceProvider.GetRequiredService<IWordCountAnalyzerServiceGds>();
@@ -759,16 +755,16 @@ public class ScannerService(
                 .SeriesRepository.GetFullSeriesForSeriesIdAsync(seriesId);
             var gdsInfo = series == null ? null : GdsUtil.GetGdsInfoBySeries(series);
 
-            await metadataServiceGds.GenerateCoversForSeries(library.Id, seriesId, false, false, gdsInfo);
-            await wordCountAnalyzerServiceGds.ScanSeries(library.Id, seriesId, forceUpdate, gdsInfo);
+            await metadataServiceGds.GenerateCoversForSeries(libraryId, seriesId, false, false, gdsInfo);
+            await wordCountAnalyzerServiceGds.ScanSeries(libraryId, seriesId, forceUpdate, gdsInfo);
 
             return;
         }
 
         var metadataService = scope.ServiceProvider.GetRequiredService<IMetadataService>();
         var wordCountAnalyzerService = scope.ServiceProvider.GetRequiredService<IWordCountAnalyzerService>();
-        await metadataService.GenerateCoversForSeries(serverSettings, library.Id, seriesId, false, false);
-        await wordCountAnalyzerService.ScanSeries(library.Id, seriesId, forceUpdate);
+        await metadataService.GenerateCoversForSeries(serverSettings, libraryId, seriesId, false, false);
+        await wordCountAnalyzerService.ScanSeries(libraryId, seriesId, forceUpdate);
     }
 
     private async Task RemoveAbandonedMetadataKeys(Library library)
