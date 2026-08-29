@@ -423,7 +423,10 @@ public class ProcessSeries(
 
         }
 
-        DeterminePublicationStatus(series, chapters);
+        if (!series.Metadata.PublicationStatusLocked)
+        {
+            DeterminePublicationStatus(series, chapters);
+        }
 
         if (!series.Metadata.SummaryLocked)
         {
@@ -789,6 +792,12 @@ public class ProcessSeries(
         }
     }
 
+    /// <summary>
+    /// Sets <see cref="SeriesMetadata.PublicationStatus"/>, <see cref="SeriesMetadata.MaxCount"/>, and <see cref="SeriesMetadata.TotalCount"/>
+    /// Only call if <see cref="SeriesMetadata.PublicationStatusLocked"/> is false
+    /// </summary>
+    /// <param name="series"></param>
+    /// <param name="chapters"></param>
     private void DeterminePublicationStatus(Series series, List<Chapter> chapters)
     {
         try
@@ -806,7 +815,7 @@ public class ProcessSeries(
             var maxChapter = (int)chapters.Max(c => c.MaxNumber);
 
             // Single books usually don't have a number in their Range (filename)
-            if (series.Format == MangaFormat.Epub || series.Format == MangaFormat.Pdf && chapters.Count == 1)
+            if (series.Format is MangaFormat.Epub or MangaFormat.Pdf && chapters.Count == 1)
             {
                 series.Metadata.MaxCount = 1;
             }
@@ -829,17 +838,14 @@ public class ProcessSeries(
                 series.Metadata.MaxCount = maxChapter;
             }
 
-            if (!series.Metadata.PublicationStatusLocked)
+            series.Metadata.PublicationStatus = PublicationStatus.OnGoing;
+            if (series.Metadata.MaxCount == series.Metadata.TotalCount && series.Metadata.TotalCount > 0)
             {
-                series.Metadata.PublicationStatus = PublicationStatus.OnGoing;
-                if (series.Metadata.MaxCount == series.Metadata.TotalCount && series.Metadata.TotalCount > 0)
-                {
-                    series.Metadata.PublicationStatus = PublicationStatus.Completed;
-                }
-                else if (series.Metadata.TotalCount > 0 && series.Metadata.MaxCount > 0)
-                {
-                    series.Metadata.PublicationStatus = PublicationStatus.Ended;
-                }
+                series.Metadata.PublicationStatus = PublicationStatus.Completed;
+            }
+            else if (series.Metadata.TotalCount > 0 && series.Metadata.MaxCount > 0)
+            {
+                series.Metadata.PublicationStatus = PublicationStatus.Ended;
             }
         }
         catch (Exception ex)
