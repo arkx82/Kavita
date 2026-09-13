@@ -23,6 +23,9 @@ on:
 
 permissions:
   contents: write
+  # The artifacts below are a handoff between two jobs, and this job throws it
+  # away once the release has the files. That is a write to Actions itself.
+  actions: write
 
 jobs:
   test:
@@ -73,12 +76,19 @@ jobs:
       - name: Build Kavita package
         run: ./build.sh ${{ matrix.rid }}
 
+      # Across to publish-release, and no further. These are a hundred and ten
+      # megabytes each and they are not the product -- the GitHub release below
+      # is, and release assets are not billed as Actions storage. Left behind,
+      # two per run, they came to three gigabytes against a half-gigabyte
+      # allowance shared by every repository on the account, and unrelated
+      # releases elsewhere began failing with nowhere to put a file.
       - name: Upload package artifact
         uses: actions/upload-artifact@v4
         with:
           name: kavita-${{ matrix.rid }}
           path: _output/kavita-${{ matrix.rid }}.tar.gz
           if-no-files-found: error
+          retention-days: 1
 
   publish-release:
     name: Publish GDS release assets
@@ -137,6 +147,31 @@ jobs:
           else
             gh release create "$VERSION" dist/kavita-linux-x64.tar.gz dist/kavita-linux-arm64.tar.gz "${release_args[@]}"
           fi
+
+      # The handoff is over: the release has the files, so the copies go.
+      #
+      # `retention-days: 1` is not enough on its own. An expired artifact is
+      # only marked expired, and GitHub collects it long enough afterwards that
+      # the storage stays billed -- and the figure the quota is checked against
+      # is recalculated every six to twelve hours, so a repository that fills it
+      # keeps everything else blocked for half a day after it is cleaned up.
+      # Deleting here means it is never filled in the first place.
+      #
+      # Not `if: success()`: a release that failed leaves the packages to be
+      # downloaded and looked at, which is the one time anybody wants them.
+      - name: Let the handoff go
+        if: always()
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          runs="repos/$GITHUB_REPOSITORY/actions/runs/$GITHUB_RUN_ID/artifacts"
+          for id in $(gh api --paginate "$runs" --jq '.artifacts[].id'); do
+            if gh api -X DELETE "repos/$GITHUB_REPOSITORY/actions/artifacts/$id"; then
+              echo "let go of artifact $id"
+            else
+              echo "::warning::could not delete artifact $id"
+            fi
+          done
 
   dispatch-docker:
     name: Trigger docker-kavita image build
