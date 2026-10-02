@@ -18,11 +18,11 @@ public static partial class TitleSortHelper
     /// <remarks>
     /// Korean Hangul syllables sort under their compatibility choseong so titles like 앨리스 index under ㅇ.
     /// </remarks>
-    public static string GetSortTitle(string title, bool removePrefix)
+    public static string GetSortTitle(string title, bool removePrefix, string language = "")
     {
         if (string.IsNullOrEmpty(title)) return string.Empty;
 
-        var sortTitle = removePrefix ? BookSortTitlePrefixHelper.GetSortTitle(title) : title;
+        var sortTitle = removePrefix ? BookSortTitlePrefixHelper.GetSortTitle(title, language) : title;
 
         return ApplyKoreanInitialSort(sortTitle);
     }

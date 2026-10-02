@@ -3166,6 +3166,16 @@ namespace Kavita.Database.Migrations
                     b.Property<bool>("NoTransitions")
                         .HasColumnType("INTEGER");
 
+                    b.Property<int>("OnDeckProgressDays")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("INTEGER")
+                        .HasDefaultValue(30);
+
+                    b.Property<int>("OnDeckUpdateDays")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("INTEGER")
+                        .HasDefaultValue(7);
+
                     b.Property<string>("OpdsPreferences")
                         .ValueGeneratedOnAdd()
                         .HasColumnType("TEXT")
@@ -4098,14 +4108,16 @@ namespace Kavita.Database.Migrations
                 {
                     b.HasOne("Kavita.Models.Entities.Chapter", null)
                         .WithMany("ExternalRatings")
-                        .HasForeignKey("ChapterId");
+                        .HasForeignKey("ChapterId")
+                        .OnDelete(DeleteBehavior.Cascade);
                 });
 
             modelBuilder.Entity("Kavita.Models.Entities.Metadata.ExternalReview", b =>
                 {
                     b.HasOne("Kavita.Models.Entities.Chapter", null)
                         .WithMany("ExternalReviews")
-                        .HasForeignKey("ChapterId");
+                        .HasForeignKey("ChapterId")
+                        .OnDelete(DeleteBehavior.Cascade);
                 });
 
             modelBuilder.Entity("Kavita.Models.Entities.Metadata.ExternalSeriesMetadata", b =>
@@ -4421,7 +4433,8 @@ namespace Kavita.Database.Migrations
                 {
                     b.HasOne("Kavita.Models.Entities.Chapter", "Chapter")
                         .WithMany()
-                        .HasForeignKey("ChapterId");
+                        .HasForeignKey("ChapterId")
+                        .OnDelete(DeleteBehavior.Cascade);
 
                     b.HasOne("Kavita.Models.Entities.Scrobble.ScrobbleEvent", "ScrobbleEvent")
                         .WithMany()
@@ -4450,7 +4463,8 @@ namespace Kavita.Database.Migrations
 
                     b.HasOne("Kavita.Models.Entities.Chapter", "Chapter")
                         .WithMany()
-                        .HasForeignKey("ChapterId");
+                        .HasForeignKey("ChapterId")
+                        .OnDelete(DeleteBehavior.Cascade);
 
                     b.HasOne("Kavita.Models.Entities.Library", "Library")
                         .WithMany()

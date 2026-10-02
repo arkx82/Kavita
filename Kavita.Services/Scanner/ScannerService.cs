@@ -411,11 +411,18 @@ public class ScannerService(
         return ScanCancelReason.NoCancel;
     }
 
-    private static void RemoveParsedInfosNotForSeries(Dictionary<ParsedSeries, IList<ParserInfo>> parsedSeries, Series series)
+    private void RemoveParsedInfosNotForSeries(Dictionary<ParsedSeries, IList<ParserInfo>> parsedSeries, Series series)
     {
-        var keys = parsedSeries.Keys;
-        foreach (var key in keys.Where(key => !SeriesHelper.FindSeries(series, key)))
+        var keysToRemove = parsedSeries.Keys
+            .Where(key => !SeriesHelper.FindSeries(series, key))
+            .ToList();
+
+        foreach (var key in keysToRemove)
         {
+            var fileNames = parsedSeries[key].Select(info => info.Filename).ToList();
+            logger.LogTrace("Removing files {FilePaths} for {SeriesName} as no match was found. {@ParsedSeries}. ",
+                fileNames, series.Name, key);
+
             parsedSeries.Remove(key);
         }
     }
@@ -622,12 +629,9 @@ public class ScannerService(
                 continue;
             }
 
-            // Filter out ParserInfos where FullFilePath is empty (i.e., folder not modified)
-            var validInfos = series.Value.Where(info => !string.IsNullOrEmpty(info.Filename)).ToList();
-
-            if (validInfos.Count != 0)
+            if (series.Value.Any(info => !string.IsNullOrEmpty(info.Filename)))
             {
-                toProcess[series.Key] = validInfos;
+                toProcess[series.Key] = series.Value.Where(info => !string.IsNullOrEmpty(info.Filename) || !string.IsNullOrEmpty(info.UnchangedFolderPath)).ToList();
             }
         }
 
@@ -803,7 +807,8 @@ public class ScannerService(
         {
             foreach (var pSeries in toProcess)
             {
-                totalFiles += pSeries.Count;
+                // Placeholders for skipped folders aren't files
+                totalFiles += pSeries.Count(info => string.IsNullOrEmpty(info.UnchangedFolderPath));
 
                 using var scope = scopeFactory.CreateScope();
                 var unitOfWork = scope.ServiceProvider.GetRequiredService<IUnitOfWork>();

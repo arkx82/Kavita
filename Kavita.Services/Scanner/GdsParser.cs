@@ -9,13 +9,13 @@ namespace Kavita.Services.Scanner;
 
 public class GdsParser(IDirectoryService directoryService, IDefaultParser imageParser) : DefaultParser(directoryService)
 {
-    public override ParserInfo? Parse(string filePath, string rootPath, string libraryRoot, LibraryType type,
+    public override ParseInfoResult Parse(string filePath, string rootPath, string libraryRoot, LibraryType type,
         bool enableMetadata = true, ComicInfo? comicInfo = null)
     {
         var fileNameWithoutExtension = directoryService.FileSystem.Path.GetFileNameWithoutExtension(filePath);
         if (type != LibraryType.Image && Parser.IsCoverImage(directoryService.FileSystem.Path.GetFileName(filePath)))
         {
-            return null;
+            return ParseInfoResult.SkippedParse();
         }
 
         if (Parser.IsImage(filePath))
@@ -49,7 +49,7 @@ public class GdsParser(IDirectoryService directoryService, IDefaultParser imageP
             parserInfo.Volumes = Parser.LooseLeafVolume;
         }
 
-        return parserInfo.Series == string.Empty ? null : parserInfo;
+        return ParseInfoResult.FromParserInfo(parserInfo);
     }
 
     public override bool IsApplicable(string filePath, LibraryType type)

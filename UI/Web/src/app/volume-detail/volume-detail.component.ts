@@ -91,6 +91,7 @@ import {ChapterCardComponent} from "../cards/chapter-card/chapter-card.component
 import {Tabs} from "../_models/tabs";
 import {TabTitlePipe} from "../_pipes/tab-title.pipe";
 import {EntityTitleService} from "../_services/entity-title.service";
+import {ActionResult} from "../_models/actionables/action-result";
 
 interface VolumeCast extends IHasCast {
   characterLocked: boolean;
@@ -140,7 +141,6 @@ interface VolumeCast extends IHasCast {
     EntityTitleComponent,
     RouterLink,
     NgbTooltip,
-    NgStyle,
     NgClass,
     TranslocoDirective,
     VirtualScrollerModule,
@@ -202,6 +202,14 @@ export class VolumeDetailComponent implements OnInit {
   libraryType = computed(() => this.library().type);
 
   coverImage = computed(() => this.imageService.getVolumeCoverImage(this.volume().id));
+
+  /**
+   * The rating block only renders for a single-chapter volume, so its links are that chapter's
+   */
+  weblinks = computed(() => {
+    const chapter = this.volume()?.chapters?.[0];
+    return chapter?.webLinks?.length ? chapter.webLinks.split(',') : [];
+  });
 
   isLoading = signal(true);
 
@@ -451,10 +459,10 @@ export class VolumeDetailComponent implements OnInit {
 
   openEditModal() {
     const ref = this.modalService.open(EditVolumeModalComponent);
-    ref.componentInstance.volume = this.volume();
-    ref.componentInstance.libraryType = this.libraryType();
-    ref.componentInstance.libraryId = this.libraryId();
-    ref.componentInstance.seriesId = this.seriesId();
+    ref.setInput('volume', this.volume());
+    ref.setInput('libraryType', this.libraryType());
+    ref.setInput('libraryId', this.libraryId());
+    ref.setInput('seriesId', this.seriesId());
 
     ref.closed.pipe(
       filter((res: ModalResult<Volume>) => res.success),
@@ -521,7 +529,25 @@ export class VolumeDetailComponent implements OnInit {
     if (idx >= 0) {
       const chapters = [...volume.chapters];
       chapters[idx] = {...updatedChapter};
-      this.volume.set({...volume, chapters});
+      this.volume.set({
+        ...volume,
+        chapters,
+        pagesRead: chapters.reduce((acc, c) => acc + c.pagesRead, 0),
+      });
+    }
+  }
+
+  handleVolumeAction(event: ActionResult<Volume>) {
+    switch (event.effect) {
+      case "update":
+      case "reload":
+        this.loadVolume();
+        break;
+      case "remove":
+        break;
+      case "none":
+        break;
+
     }
   }
 

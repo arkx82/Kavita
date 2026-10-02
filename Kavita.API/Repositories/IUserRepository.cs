@@ -75,6 +75,7 @@ public interface IUserRepository
     Task<AppUser> GetDefaultAdminUser(AppUserIncludes includes = AppUserIncludes.None, CancellationToken ct = default);
     Task<AppUser?> GetUserByDeviceEmail(string deviceEmail, CancellationToken ct = default);
     Task<AppUser?> GetByOidcId(string? oidcId, AppUserIncludes includes = AppUserIncludes.None, CancellationToken ct = default);
+    Task<UserRatingAndReviewDto> GetMyRatingAndReviewForSeries(int userId, int seriesId, CancellationToken ct = default);
     #endregion
 
     #region Ratings & Reviews
@@ -111,6 +112,7 @@ public interface IUserRepository
 
     #region Permissions
     Task<bool> HasAccessToLibrary(int userId, int libraryId, CancellationToken ct = default);
+    Task<bool> HasAccessToSeries(int userId, IEnumerable<int> seriesIds, CancellationToken ct = default);
     Task<bool> HasAccessToSeries(int userId, int seriesId, CancellationToken ct = default);
     Task<bool> HasAccessToVolume(int userId, int volumeId, CancellationToken ct = default);
     Task<bool> HasAccessToChapter(int userId, int chapterId, CancellationToken ct = default);
